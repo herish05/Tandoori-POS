@@ -1,0 +1,83 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Tandoori-POS palette: tandoori red on a warm-neutral surface, deep navy for chrome. */
+    --background: 0 0% 98%;
+    --foreground: 220 25% 12%;
+    --card: 0 0% 100%;
+    --card-foreground: 220 25% 12%;
+    --primary: 355 70% 42%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 220 14% 94%;
+    --secondary-foreground: 220 25% 18%;
+    --muted: 220 14% 95%;
+    --muted-foreground: 220 9% 40%;
+    --accent: 355 80% 96%;
+    --accent-foreground: 355 70% 32%;
+    --destructive: 0 75% 40%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 13% 88%;
+    --input: 220 13% 80%;
+    --ring: 355 70% 42%;
+    --radius: 0.5rem;
+
+    --navy: 214 52% 11%;
+    --navy-foreground: 210 30% 96%;
+    --success: 142 65% 30%;
+    --warning: 32 90% 40%;
+
+    /* Table status palette */
+    --table-available: 0 0% 96%;
+    --table-available-ink: 0 0% 38%;
+    --table-reserved: 262 80% 93%;
+    --table-reserved-ink: 262 45% 36%;
+    --table-occupied: 205 90% 85%;
+    --table-occupied-ink: 205 70% 24%;
+    --table-kot: 50 100% 72%;
+    --table-kot-ink: 42 80% 20%;
+    --table-preparing: 22 95% 80%;
+    --table-preparing-ink: 20 80% 26%;
+    --table-ready: 120 55% 78%;
+    --table-ready-ink: 130 60% 18%;
+    --table-bill: 330 85% 89%;
+    --table-bill-ink: 330 60% 32%;
+    --table-payment: 175 55% 78%;
+    --table-payment-ink: 175 70% 18%;
+    --table-paid: 38 80% 86%;
+    --table-paid-ink: 30 60% 26%;
+    --table-blocked: 0 0% 80%;
+    --table-blocked-ink: 0 0% 22%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-background font-sans text-foreground antialiased;
+    /* A POS is operated by touch and mouse: avoid accidental text selection while tapping. */
+    user-select: none;
+    -webkit-user-select: none;
+    overflow: hidden;
+  }
+
+  input,
+  textarea,
+  [data-selectable] {
+    user-select: text;
+    -webkit-user-select: text;
+  }
+
+  :focus-visible {
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+  }
+}

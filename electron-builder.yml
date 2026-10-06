@@ -1,0 +1,40 @@
+appId: com.tandooribites.pos
+productName: Tandoori-POS
+copyright: Copyright © Tandoori Bites
+directories:
+  output: release
+  buildResources: build
+files:
+  - out/**
+  - package.json
+extraResources:
+  - from: drizzle
+    to: drizzle
+asar: true
+npmRebuild: true
+
+win:
+  icon: build/icon.png
+  target:
+    - target: nsis
+      arch: [x64]
+  artifactName: ${productName}-Setup-${version}.${ext}
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Tandoori-POS
+  deleteAppDataOnUninstall: false
+
+linux:
+  icon: build/icon.png
+  category: Office
+  syncDesktopName: true
+  maintainer: Tandoori Bites <noreply@tandoori-pos.local>
+  synopsis: Restaurant POS and management
+  target:
+    - AppImage
+    - deb
+  artifactName: ${productName}-${version}-${arch}.${ext}

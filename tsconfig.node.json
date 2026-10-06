@@ -1,0 +1,19 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2023"],
+    "types": ["node", "electron-vite/node"],
+    "baseUrl": ".",
+    "paths": {
+      "@shared/*": ["electron/shared/*"],
+      "@main/*": ["electron/main/*"]
+    }
+  },
+  "include": [
+    "electron/**/*",
+    "tests/main/**/*",
+    "electron.vite.config.ts",
+    "drizzle.config.ts",
+    "vitest.config.ts"
+  ]
+}

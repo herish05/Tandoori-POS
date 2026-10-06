@@ -1,0 +1,41 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1791193541259,
+      "tag": "0000_init_settings",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1791198254729,
+      "tag": "0001_auth_and_restaurant",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1791200642929,
+      "tag": "0002_tables_and_areas",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1791256889747,
+      "tag": "0003_menu_management",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1791258868484,
+      "tag": "0004_order_management",
+      "breakpoints": true
+    }
+  ]
+}
