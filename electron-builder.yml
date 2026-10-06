@@ -18,7 +18,7 @@ win:
   target:
     - target: nsis
       arch: [x64]
-  artifactName: ${productName}-Setup-${version}.${ext}
+  artifactName: ${productName}-Setup.${ext}
 nsis:
   oneClick: false
   perMachine: false
@@ -37,4 +37,4 @@ linux:
   target:
     - AppImage
     - deb
-  artifactName: ${productName}-${version}-${arch}.${ext}
+  artifactName: ${productName}-${arch}.${ext}

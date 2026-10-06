@@ -45,17 +45,36 @@ Tests run with `ELECTRON_RUN_AS_NODE=1` so native modules load with the same ABI
 
 Never put secrets in these files. Development only: `TANDOORI_USER_DATA_DIR=/some/dir npm run dev` runs against a throwaway data folder. For a built app use `npx electron-vite build --mode development` first; `npm run build` is a production build and ignores the override.
 
-## Installers (Windows and Linux)
+## Download
 
-```
-npm run package:linux   # release/Tandoori-POS-<version>-x86_64.AppImage and ...-amd64.deb
-npm run package:win     # release/Tandoori-POS-Setup-<version>.exe (Next, Next, Install wizard)
-```
+Latest release: <https://github.com/herish05/Tandoori-POS/releases/latest>
 
-Build the Windows installer on a Windows PC (or with Wine installed on Linux), or let the
-`Build installers` GitHub Actions workflow produce both from a pushed repository. The installed
-app keeps its data per user (Windows: `%APPDATA%\Tandoori-POS`, Linux: `~/.config/Tandoori-POS`),
+| System  | File                                                                                                                           | How to install                                   |
+| ------- | ------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------ |
+| Windows | [Tandoori-POS-Setup.exe](https://github.com/herish05/Tandoori-POS/releases/latest/download/Tandoori-POS-Setup.exe)             | Run it and click Next, Next, Install             |
+| Linux   | [Tandoori-POS-x86_64.AppImage](https://github.com/herish05/Tandoori-POS/releases/latest/download/Tandoori-POS-x86_64.AppImage) | `chmod +x` the file, then double-click or run it |
+| Linux   | [Tandoori-POS-amd64.deb](https://github.com/herish05/Tandoori-POS/releases/latest/download/Tandoori-POS-amd64.deb)             | `sudo apt install ./Tandoori-POS-amd64.deb`      |
+
+The installers are unsigned, so Windows SmartScreen may ask you to click "More info" then "Run anyway".
+The app keeps its data per user (Windows: `%APPDATA%\Tandoori-POS`, Linux: `~/.config/Tandoori-POS`),
 so updating or uninstalling does not delete restaurant data.
+
+### Publishing a release
+
+```
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+The `Build installers` workflow builds the Windows and Linux installers and attaches them to the
+release. Run it by hand from the Actions tab to get the files as downloadable artifacts instead.
+
+### Building locally
+
+```
+npm run package:linux   # release/*.AppImage and release/*.deb
+npm run package:win     # release/Tandoori-POS-Setup.exe (needs Windows, or Wine on Linux)
+```
 
 ## Forgot the sign-in on a development machine
 
