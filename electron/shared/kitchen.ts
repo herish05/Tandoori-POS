@@ -131,6 +131,10 @@ export interface KotDetail extends KotSummary {
   /** The order's own notes, so the kitchen sees them too. */
   orderNotes: string | null
   guestCount: number | null
+  /** For a delivery or pickup: how to reach the customer, where to take it, and when. */
+  customerPhone: string | null
+  deliveryAddress: string | null
+  promisedAt: string | null
 }
 
 /** An order together with the tickets it produced, as returned when it is sent to the kitchen. */

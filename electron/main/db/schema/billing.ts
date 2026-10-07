@@ -38,6 +38,12 @@ export const billingSettings = sqliteTable(
       .default(true),
     roundOffUnit: integer('round_off_unit').notNull().default(100),
     autoPrintReceipt: integer('auto_print_receipt', { mode: 'boolean' }).notNull().default(false),
+    /** Flat charges for takeaway and delivery, in paise; their GST in basis points. */
+    deliveryCharge: integer('delivery_charge').notNull().default(0),
+    deliveryFreeAbove: integer('delivery_free_above').notNull().default(0),
+    deliveryChargeTaxBps: integer('delivery_charge_tax_bps').notNull().default(0),
+    packagingCharge: integer('packaging_charge').notNull().default(0),
+    packagingChargeTaxBps: integer('packaging_charge_tax_bps').notNull().default(0),
     updatedBy: text('updated_by').references(() => users.id)
   },
   (table) => [
@@ -71,6 +77,11 @@ export const bills = sqliteTable(
       .notNull()
       .default(true),
     roundOffUnit: integer('round_off_unit').notNull().default(100),
+    /** Flat delivery and packaging charges fixed when the bill was made (0 = none), and their GST. */
+    deliveryCharge: integer('delivery_charge').notNull().default(0),
+    deliveryChargeTaxBps: integer('delivery_charge_tax_bps').notNull().default(0),
+    packagingCharge: integer('packaging_charge').notNull().default(0),
+    packagingChargeTaxBps: integer('packaging_charge_tax_bps').notNull().default(0),
     // The worked-out figures, recalculated by the server whenever a discount changes.
     subtotal: integer('subtotal').notNull(),
     itemDiscountTotal: integer('item_discount_total').notNull().default(0),

@@ -8,10 +8,13 @@ import { AuditLogsPage } from '@/pages/AuditLogsPage'
 import { BillingSettingsPage } from '@/pages/BillingSettingsPage'
 import { BillPage } from '@/pages/BillPage'
 import { BillsPage } from '@/pages/BillsPage'
+import { CustomersPage } from '@/pages/CustomersPage'
+import { InventoryPage } from '@/pages/InventoryPage'
 import { KotsPage } from '@/pages/KotsPage'
 import { MenuPage } from '@/pages/MenuPage'
 import { OrderPage } from '@/pages/OrderPage'
 import { PrintersPage } from '@/pages/PrintersPage'
+import { ReservationsPage } from '@/pages/ReservationsPage'
 import { RestaurantSettingsPage } from '@/pages/RestaurantSettingsPage'
 import { RolesPage } from '@/pages/RolesPage'
 import { SetupPage } from '@/pages/SetupPage'
@@ -33,6 +36,9 @@ const ADMIN_PAGES: Record<string, ReactNode> = {
   '/admin/menu': <MenuPage />,
   '/admin/tables': <TablesPage />,
   '/admin/bills': <BillsPage />,
+  '/admin/reservations': <ReservationsPage />,
+  '/admin/customers': <CustomersPage />,
+  '/admin/inventory': <InventoryPage />,
   '/admin/billing-settings': <BillingSettingsPage />,
   '/admin/kot': <KotsPage />,
   '/admin/printers': <PrintersPage />,

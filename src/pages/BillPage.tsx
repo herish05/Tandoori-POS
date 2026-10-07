@@ -435,6 +435,10 @@ function BillScreen({ bill }: { bill: BillDetail }) {
                 value={bill.serviceCharge}
               />
             )}
+            {bill.deliveryCharge > 0 && <Row label="Delivery charge" value={bill.deliveryCharge} />}
+            {bill.packagingCharge > 0 && (
+              <Row label="Packaging charge" value={bill.packagingCharge} />
+            )}
             {bill.taxes.map((tax) => (
               <Row
                 key={`${tax.component}-${String(tax.rateBps)}`}

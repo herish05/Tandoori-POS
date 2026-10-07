@@ -21,7 +21,12 @@ function toSettings(row: SettingsRow): BillingSettings {
     serviceChargeTaxable: row.serviceChargeTaxable,
     // The table's check constraint keeps this to the supported units.
     roundOffUnit: row.roundOffUnit as RoundOffUnit,
-    autoPrintReceipt: row.autoPrintReceipt
+    autoPrintReceipt: row.autoPrintReceipt,
+    deliveryCharge: row.deliveryCharge,
+    deliveryFreeAbove: row.deliveryFreeAbove,
+    deliveryChargeTaxBps: row.deliveryChargeTaxBps,
+    packagingCharge: row.packagingCharge,
+    packagingChargeTaxBps: row.packagingChargeTaxBps
   }
 }
 
@@ -57,6 +62,11 @@ export class BillingSettingsService {
         serviceChargeTaxable: input.serviceChargeTaxable,
         roundOffUnit: input.roundOffUnit,
         autoPrintReceipt: input.autoPrintReceipt,
+        deliveryCharge: input.deliveryCharge,
+        deliveryFreeAbove: input.deliveryFreeAbove,
+        deliveryChargeTaxBps: input.deliveryChargeTaxBps,
+        packagingCharge: input.packagingCharge,
+        packagingChargeTaxBps: input.packagingChargeTaxBps,
         updatedBy: auth.userId
       }
       if (existing) {
@@ -84,7 +94,12 @@ export class BillingSettingsService {
               serviceChargeDineInOnly: input.serviceChargeDineInOnly,
               serviceChargeTaxable: input.serviceChargeTaxable,
               roundOffUnit: input.roundOffUnit,
-              autoPrintReceipt: input.autoPrintReceipt
+              autoPrintReceipt: input.autoPrintReceipt,
+              deliveryCharge: input.deliveryCharge,
+              deliveryFreeAbove: input.deliveryFreeAbove,
+              deliveryChargeTaxBps: input.deliveryChargeTaxBps,
+              packagingCharge: input.packagingCharge,
+              packagingChargeTaxBps: input.packagingChargeTaxBps
             }
           }
         },

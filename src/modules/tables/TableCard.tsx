@@ -1,9 +1,9 @@
-import { Clock, Users } from 'lucide-react'
+import { CalendarClock, Clock, Users } from 'lucide-react'
 import type { ButtonHTMLAttributes } from 'react'
 import { TABLE_TYPE_LABELS, type DiningTable } from '@shared/tables'
 import { cn } from '@/lib/utils'
 import { TABLE_STATUS_META } from './table-status'
-import { formatElapsed } from './table-time'
+import { formatElapsed, formatReservedTime } from './table-time'
 
 export interface TableCardProps extends Omit<
   ButtonHTMLAttributes<HTMLButtonElement>,
@@ -84,6 +84,12 @@ export function TableCard({
       {!compact && (
         <span className="flex flex-col gap-0.5 text-xs">
           <span className="font-semibold">{status}</span>
+          {table.reservedFor !== null && !seated && (
+            <span className="flex items-center gap-1 font-medium">
+              <CalendarClock className="size-3" aria-hidden />
+              {table.reservedName ?? 'Reserved'} · {formatReservedTime(table.reservedFor)}
+            </span>
+          )}
           {seated && table.openedAt && now !== undefined && (
             <span className="flex items-center gap-1 opacity-80">
               <Clock className="size-3" aria-hidden />

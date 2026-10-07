@@ -142,6 +142,8 @@ export function buildReceipt(input: ReceiptInput): TicketLine[] {
   if (bill.serviceCharge > 0) {
     lines.push(money(`Service charge ${formatPercent(bill.serviceChargeBps)}%`, bill.serviceCharge))
   }
+  if (bill.deliveryCharge > 0) lines.push(money('Delivery charge', bill.deliveryCharge))
+  if (bill.packagingCharge > 0) lines.push(money('Packaging charge', bill.packagingCharge))
   for (const tax of bill.taxes) {
     const shown = tax.component === 'IGST' ? tax.rateBps : tax.rateBps / 2
     lines.push(money(`${COMPONENT_LABELS[tax.component]} ${formatPercent(shown)}%`, tax.taxAmount))

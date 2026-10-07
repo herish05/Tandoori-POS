@@ -32,7 +32,14 @@ export const PERMISSION_CODES = [
   'billing.operate',
   'billing.discount',
   'billing.refund',
-  'billing.manage'
+  'billing.manage',
+  'customers.view',
+  'customers.manage',
+  'reservations.view',
+  'reservations.operate',
+  'inventory.view',
+  'inventory.manage',
+  'inventory.operate'
 ] as const
 
 export type PermissionCode = (typeof PERMISSION_CODES)[number]
@@ -185,6 +192,41 @@ export const PERMISSION_META: Record<PermissionCode, PermissionMeta> = {
     label: 'Manage billing settings',
     group: 'Billing',
     description: 'Change the GST split, service charge and round off used on new bills.'
+  },
+  'customers.view': {
+    label: 'View customers',
+    group: 'Customers',
+    description: 'See the customer list, their addresses and order history.'
+  },
+  'customers.manage': {
+    label: 'Manage customers',
+    group: 'Customers',
+    description: 'Add, edit and delete customers and their saved addresses.'
+  },
+  'reservations.view': {
+    label: 'View reservations',
+    group: 'Reservations',
+    description: 'See table bookings and which tables are reserved.'
+  },
+  'reservations.operate': {
+    label: 'Take reservations',
+    group: 'Reservations',
+    description: 'Book, change and cancel reservations, mark no-shows and seat guests.'
+  },
+  'inventory.view': {
+    label: 'View stock',
+    group: 'Inventory',
+    description: 'See stock items, how much is on hand, the stock ledger and recipes.'
+  },
+  'inventory.manage': {
+    label: 'Manage stock items and recipes',
+    group: 'Inventory',
+    description: 'Add, edit, deactivate and delete stock items, and set what each menu item uses.'
+  },
+  'inventory.operate': {
+    label: 'Record stock changes',
+    group: 'Inventory',
+    description: 'Record stock coming in, wastage and stock counts.'
   }
 }
 
@@ -198,7 +240,8 @@ export const ALSO_IMPLIED: Partial<Record<PermissionCode, readonly PermissionCod
   'tables.transfer': ['tables.view', 'orders.view'],
   'kitchen.operate': ['kitchen.access'],
   'billing.discount': ['billing.operate', 'billing.view'],
-  'billing.refund': ['billing.view']
+  'billing.refund': ['billing.view'],
+  'inventory.manage': ['inventory.operate']
 }
 
 export const OWNER_ROLE_NAME = 'OWNER'

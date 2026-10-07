@@ -70,6 +70,10 @@ export interface DiningTable {
   openedAt: string | null
   openedByName: string | null
   guestCount: number | null
+  /** While a free table is held for a booking (about to start or running): that booking. */
+  reservationId: string | null
+  reservedFor: string | null
+  reservedName: string | null
 }
 
 /** An active area with its active tables, as shown on the POS floor. */

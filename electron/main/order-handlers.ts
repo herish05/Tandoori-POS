@@ -5,6 +5,7 @@ import {
   cancelLineInputSchema,
   cancelOrderInputSchema,
   createOrderInputSchema,
+  dispatchOrderInputSchema,
   orderFilterSchema,
   removeLineInputSchema,
   setOrderStatusInputSchema,
@@ -87,6 +88,12 @@ export function registerOrderHandlers(registrar: IpcRegistrar, services: Service
     setOrderStatusInputSchema,
     OPERATE,
     (input, ctx) => orders.setStatus(ctx, input)
+  )
+  registrar.handleProtected(
+    IPC_CHANNELS.ordersDispatch,
+    dispatchOrderInputSchema,
+    OPERATE,
+    (input, ctx) => orders.dispatch(ctx, input)
   )
 
   // --- Cancel ---------------------------------------------------------------------------------

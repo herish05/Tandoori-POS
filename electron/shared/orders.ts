@@ -48,6 +48,28 @@ export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
 }
 
 /**
+ * What staff call a status for this kind of order. A takeaway or pickup is "handed over", a
+ * delivery is "out for delivery" once a rider has taken it and "delivered" afterwards; dine-in
+ * keeps the plain names.
+ */
+export function orderStatusLabelFor(order: {
+  type: OrderType
+  status: OrderStatus
+  dispatchedAt: string | null
+}): string {
+  if (order.type === 'DINE_IN') return ORDER_STATUS_LABELS[order.status]
+  if (order.type === 'DELIVERY') {
+    if (order.status === 'READY')
+      return order.dispatchedAt ? 'Out for delivery' : 'Ready to dispatch'
+    if (order.status === 'SERVED') return 'Delivered'
+    return ORDER_STATUS_LABELS[order.status]
+  }
+  if (order.status === 'READY') return 'Ready for pickup'
+  if (order.status === 'SERVED') return 'Handed over'
+  return ORDER_STATUS_LABELS[order.status]
+}
+
+/**
  * A line is NEW until it is sent to the kitchen, then SENT. A cancelled line stays on the order
  * (struck through) so the kitchen and the audit trail can still explain what happened.
  */
@@ -123,6 +145,11 @@ export const KITCHEN_ORDER_STATUSES: readonly OrderStatus[] = [
   'READY'
 ]
 
+/** How far ahead a pickup or delivery can be promised. */
+export const MAX_PROMISE_AHEAD_MS = 7 * 24 * 60 * 60 * 1000
+/** A promised time may be this far in the past when the order is created (clock drift, typing). */
+export const PROMISE_PAST_GRACE_MS = 5 * 60 * 1000
+
 export const MAX_LINE_QUANTITY = 99
 export const MAX_LINE_ADDONS = 20
 export const MAX_ORDER_LINES = 100
@@ -178,8 +205,19 @@ export interface OrderSummary {
   tableName: string | null
   areaName: string | null
   guestCount: number | null
+  /** The customer record this order was matched to by phone number. */
+  customerId: string | null
   customerName: string | null
   customerPhone: string | null
+  /** Takeaway, pickup and delivery: when the customer was promised the food (ISO time). */
+  promisedAt: string | null
+  /** Delivery: the rider who took the order out. */
+  riderName: string | null
+  riderPhone: string | null
+  /** Delivery: when it went out with the rider. */
+  dispatchedAt: string | null
+  /** Takeaway, pickup and delivery: when the customer got the food. */
+  handedOverAt: string | null
   /** Quantity of the lines that are not cancelled. */
   itemCount: number
   /** Paise: the live lines added up. Tax and discounts come with billing. */
@@ -304,11 +342,18 @@ export const orderLineInputSchema = z
     }
   })
 
+const promisedAtField = z
+  .union([z.iso.datetime({ offset: true, message: 'Enter a valid time.' }), z.literal('')])
+  .nullish()
+  .transform((value) => (value === null || value === undefined || value === '' ? null : value))
+
 const customerFields = {
   customerName: optionalText('Customer name', 80),
   customerPhone: phoneField,
   deliveryAddress: optionalText('Address', 300),
-  notes: optionalText('Order notes', 300)
+  notes: optionalText('Order notes', 300),
+  /** Takeaway, pickup and delivery only; ignored for dine-in. */
+  promisedAt: promisedAtField
 }
 
 interface TypeRules {
@@ -415,6 +460,17 @@ export const cancelOrderInputSchema = z.object({
     .transform((value) => (value === null || value === undefined || value === '' ? null : value))
 })
 
+/** Sends a delivery out with a rider (or hands it to another rider while it is still out). */
+export const dispatchOrderInputSchema = z.object({
+  orderId: idSchema,
+  riderName: z
+    .string('Enter the rider name.')
+    .trim()
+    .min(2, 'Enter the rider name.')
+    .max(60, 'The rider name must be at most 60 characters.'),
+  riderPhone: phoneField
+})
+
 export const setOrderStatusInputSchema = z.object({
   id: idSchema,
   status: z.enum(SETTABLE_ORDER_STATUSES)
@@ -426,6 +482,7 @@ export const orderFilterSchema = z.object({
   statuses: z.array(z.enum(ORDER_STATUSES)).max(ORDER_STATUSES.length).optional(),
   type: z.enum(ORDER_TYPES).optional(),
   tableId: idSchema.optional(),
+  customerId: idSchema.optional(),
   /** Matches the order number, customer name or phone. */
   search: z.string().trim().max(60).optional(),
   limit: z.number().int().min(1).max(500).optional()
@@ -439,6 +496,7 @@ export type UpdateLineInput = z.input<typeof updateLineInputSchema>
 export type RemoveLineInput = z.input<typeof removeLineInputSchema>
 export type CancelLineInput = z.input<typeof cancelLineInputSchema>
 export type CancelOrderInput = z.input<typeof cancelOrderInputSchema>
+export type DispatchOrderInput = z.input<typeof dispatchOrderInputSchema>
 export type SetOrderStatusInput = z.input<typeof setOrderStatusInputSchema>
 export type OrderFilterInput = z.input<typeof orderFilterSchema>
 
@@ -450,5 +508,6 @@ export type UpdateLineData = z.output<typeof updateLineInputSchema>
 export type RemoveLineData = z.output<typeof removeLineInputSchema>
 export type CancelLineData = z.output<typeof cancelLineInputSchema>
 export type CancelOrderData = z.output<typeof cancelOrderInputSchema>
+export type DispatchOrderData = z.output<typeof dispatchOrderInputSchema>
 export type SetOrderStatusData = z.output<typeof setOrderStatusInputSchema>
 export type OrderFilterData = z.output<typeof orderFilterSchema>

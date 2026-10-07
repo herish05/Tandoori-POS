@@ -150,6 +150,7 @@ const api: TandooriApi = {
     cancelLine: (input) => invoke(IPC_CHANNELS.ordersCancelLine, input),
     send: (id) => invoke(IPC_CHANNELS.ordersSend, { id }),
     setStatus: (input) => invoke(IPC_CHANNELS.ordersSetStatus, input),
+    dispatch: (input) => invoke(IPC_CHANNELS.ordersDispatch, input),
     cancel: (input) => invoke(IPC_CHANNELS.ordersCancel, input)
   },
   kots: {
@@ -179,6 +180,43 @@ const api: TandooriApi = {
     preview: (input) => invoke(IPC_CHANNELS.receiptsPreview, input),
     print: (input) => invoke(IPC_CHANNELS.receiptsPrint, input),
     history: (billId) => invoke(IPC_CHANNELS.receiptsHistory, { id: billId })
+  },
+  customers: {
+    list: (filter) => invoke(IPC_CHANNELS.customersList, filter),
+    get: (id) => invoke(IPC_CHANNELS.customersGet, { id }),
+    lookup: (input) => invoke(IPC_CHANNELS.customersLookup, input),
+    create: (input) => invoke(IPC_CHANNELS.customersCreate, input),
+    update: (input) => invoke(IPC_CHANNELS.customersUpdate, input),
+    delete: (id) => invoke(IPC_CHANNELS.customersDelete, { id }),
+    addAddress: (input) => invoke(IPC_CHANNELS.customersAddAddress, input),
+    updateAddress: (input) => invoke(IPC_CHANNELS.customersUpdateAddress, input),
+    removeAddress: (id) => invoke(IPC_CHANNELS.customersRemoveAddress, { id })
+  },
+  reservations: {
+    list: (filter) => invoke(IPC_CHANNELS.reservationsList, filter),
+    get: (id) => invoke(IPC_CHANNELS.reservationsGet, { id }),
+    create: (input) => invoke(IPC_CHANNELS.reservationsCreate, input),
+    update: (input) => invoke(IPC_CHANNELS.reservationsUpdate, input),
+    cancel: (input) => invoke(IPC_CHANNELS.reservationsCancel, input),
+    noShow: (id) => invoke(IPC_CHANNELS.reservationsNoShow, { id }),
+    seat: (input) => invoke(IPC_CHANNELS.reservationsSeat, input)
+  },
+  inventory: {
+    summary: () => invoke(IPC_CHANNELS.inventorySummary),
+    list: (filter) => invoke(IPC_CHANNELS.inventoryList, filter),
+    create: (input) => invoke(IPC_CHANNELS.inventoryCreate, input),
+    update: (input) => invoke(IPC_CHANNELS.inventoryUpdate, input),
+    setActive: (input) => invoke(IPC_CHANNELS.inventorySetActive, input),
+    delete: (id) => invoke(IPC_CHANNELS.inventoryDelete, { id }),
+    stockIn: (input) => invoke(IPC_CHANNELS.inventoryStockIn, input),
+    wastage: (input) => invoke(IPC_CHANNELS.inventoryWastage, input),
+    count: (input) => invoke(IPC_CHANNELS.inventoryCount, input),
+    movements: (filter) => invoke(IPC_CHANNELS.inventoryMovements, filter)
+  },
+  recipes: {
+    coverage: () => invoke(IPC_CHANNELS.recipesCoverage),
+    get: (menuItemId) => invoke(IPC_CHANNELS.recipesGet, { menuItemId }),
+    set: (input) => invoke(IPC_CHANNELS.recipesSet, input)
   },
   printers: {
     list: () => invoke(IPC_CHANNELS.printersList),

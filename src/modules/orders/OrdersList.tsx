@@ -3,7 +3,7 @@ import { Search } from 'lucide-react'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  ORDER_STATUS_LABELS,
+  orderStatusLabelFor,
   ORDER_TYPE_LABELS,
   ORDER_TYPES,
   type OrderSummary,
@@ -161,7 +161,7 @@ export function OrdersList() {
                 <span className="flex items-center justify-between gap-2">
                   <span className="font-bold">{order.orderNumber}</span>
                   <Badge variant={ORDER_STATUS_TONE[order.status]}>
-                    {ORDER_STATUS_LABELS[order.status]}
+                    {orderStatusLabelFor(order)}
                   </Badge>
                 </span>
                 <span className="flex items-center justify-between gap-2 text-sm">
@@ -175,6 +175,17 @@ export function OrdersList() {
                   <span>
                     {order.itemCount} {order.itemCount === 1 ? 'item' : 'items'} ·{' '}
                     {order.createdByName}
+                    {order.promisedAt && scope === 'ACTIVE' && (
+                      <span className="font-semibold text-foreground">
+                        {' '}
+                        · by{' '}
+                        {new Date(order.promisedAt).toLocaleTimeString([], {
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })}
+                      </span>
+                    )}
+                    {order.riderName && scope === 'ACTIVE' && ` · ${order.riderName}`}
                   </span>
                   <span>
                     {scope === 'ACTIVE'

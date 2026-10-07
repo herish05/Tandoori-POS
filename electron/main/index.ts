@@ -14,7 +14,10 @@ import { registerAuthHandlers } from './auth-handlers'
 import { registerMenuHandlers } from './menu-handlers'
 import { registerBillingHandlers } from './billing-handlers'
 import { registerKitchenHandlers } from './kitchen-handlers'
+import { registerCustomerHandlers } from './customer-handlers'
+import { registerInventoryHandlers } from './inventory-handlers'
 import { registerOrderHandlers } from './order-handlers'
+import { registerReservationHandlers } from './reservation-handlers'
 import { registerTableHandlers } from './table-handlers'
 import { registerCoreHandlers } from './ipc/handlers'
 import { LogManager } from './logging/log-manager'
@@ -162,6 +165,9 @@ function bootstrap(): void {
     registerOrderHandlers(registrar, services)
     registerKitchenHandlers(registrar, services)
     registerBillingHandlers(registrar, services)
+    registerCustomerHandlers(registrar, services)
+    registerReservationHandlers(registrar, services)
+    registerInventoryHandlers(registrar, services)
   }
 
   mainWindow = createMainWindow(ctx, { devServerUrl })

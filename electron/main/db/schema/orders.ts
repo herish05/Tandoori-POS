@@ -14,6 +14,7 @@ import { ORDER_LINE_STATUSES, ORDER_STATUSES, ORDER_TYPES } from '../../../share
 import { baseColumns } from './common'
 import { restaurants, users } from './auth'
 import { kitchenStations, menuAddons, menuItems, menuVariants } from './menu'
+import { customers } from './customers'
 import { diningTables } from './tables'
 
 /*
@@ -37,10 +38,21 @@ export const orders = sqliteTable(
     /** Set for dine-in orders only. */
     tableId: text('table_id').references(() => diningTables.id),
     guestCount: integer('guest_count'),
+    /** The customer master record this order belongs to (matched by phone), if any. */
+    customerId: text('customer_id').references(() => customers.id),
     customerName: text('customer_name'),
     customerPhone: text('customer_phone'),
     deliveryAddress: text('delivery_address'),
     notes: text('notes'),
+    /** Takeaway, pickup and delivery: when the customer was promised the food. */
+    promisedAt: integer('promised_at', { mode: 'timestamp_ms' }),
+    /** Delivery: the rider who took the order out, and when. */
+    riderName: text('rider_name'),
+    riderPhone: text('rider_phone'),
+    dispatchedAt: integer('dispatched_at', { mode: 'timestamp_ms' }),
+    dispatchedBy: text('dispatched_by').references(() => users.id),
+    /** Takeaway, pickup and delivery: when the customer received the food. */
+    handedOverAt: integer('handed_over_at', { mode: 'timestamp_ms' }),
     /** The live (not cancelled) lines added up; kept in step by every change to the lines. */
     subtotal: integer('subtotal').notNull().default(0),
     confirmedAt: integer('confirmed_at', { mode: 'timestamp_ms' }),
@@ -61,6 +73,7 @@ export const orders = sqliteTable(
       ),
     index('orders_status_idx').on(table.status),
     index('orders_table_idx').on(table.tableId),
+    index('orders_customer_idx').on(table.customerId),
     index('orders_created_idx').on(table.createdAt),
     check('orders_table_check', sql`(${table.type} = 'DINE_IN') = (${table.tableId} is not null)`),
     check('orders_subtotal_check', sql`${table.subtotal} >= 0`)

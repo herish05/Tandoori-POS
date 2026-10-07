@@ -10,6 +10,8 @@ import { toUserMessage } from '@/lib/ipc'
 import { cn } from '@/lib/utils'
 import { ORDER_KEYS, ORDER_REFRESH_MS } from '@/modules/orders/hooks'
 import { OrdersList } from '@/modules/orders/OrdersList'
+import { PickupBoard } from '@/modules/orders/PickupBoard'
+import { ReservationBoard } from '@/modules/reservations/ReservationBoard'
 import { FloorGrid } from '@/modules/tables/FloorGrid'
 import { TABLE_KEYS, useNow } from '@/modules/tables/hooks'
 import { TableActions } from '@/modules/tables/TableActions'
@@ -63,15 +65,24 @@ function FilterChip({
 /** POS home: the table floor, or the list of orders for those who may see orders. */
 export function PosPage() {
   const canViewOrders = usePermission('orders.view')
+  const canViewReservations = usePermission('reservations.view')
   const [params, setParams] = useSearchParams()
-  const view = canViewOrders && params.get('view') === 'orders' ? 'orders' : 'tables'
+  const requested = params.get('view')
+  const view =
+    canViewOrders && requested === 'orders'
+      ? 'orders'
+      : canViewOrders && requested === 'pickup'
+        ? 'pickup'
+        : canViewReservations && requested === 'reservations'
+          ? 'reservations'
+          : 'tables'
 
-  const tab = (value: 'tables' | 'orders', label: string) => (
+  const tab = (value: 'tables' | 'orders' | 'pickup' | 'reservations', label: string) => (
     <button
       type="button"
       aria-pressed={view === value}
       onClick={() => {
-        setParams(value === 'orders' ? { view: 'orders' } : {}, { replace: true })
+        setParams(value === 'tables' ? {} : { view: value }, { replace: true })
       }}
       className={cn(
         'h-9 rounded-md px-4 text-sm font-semibold transition-colors touch:h-11',
@@ -84,16 +95,26 @@ export function PosPage() {
 
   return (
     <div className="flex h-full flex-col">
-      {canViewOrders && (
+      {(canViewOrders || canViewReservations) && (
         <div className="flex gap-1 border-b bg-card px-5 py-2" role="group" aria-label="POS view">
           {tab('tables', 'Tables')}
-          {tab('orders', 'Orders')}
+          {canViewOrders && tab('orders', 'Orders')}
+          {canViewOrders && tab('pickup', 'Pickup & delivery')}
+          {canViewReservations && tab('reservations', 'Reservations')}
         </div>
       )}
       <div className="min-h-0 flex-1">
         {view === 'orders' ? (
           <div className="h-full overflow-auto">
             <OrdersList />
+          </div>
+        ) : view === 'pickup' ? (
+          <div className="h-full overflow-auto">
+            <PickupBoard />
+          </div>
+        ) : view === 'reservations' ? (
+          <div className="h-full overflow-auto p-5">
+            <ReservationBoard />
           </div>
         ) : (
           <TableView />

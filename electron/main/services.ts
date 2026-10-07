@@ -14,6 +14,10 @@ import { StationService } from './menu/station-service'
 import { TaxCategoryService } from './menu/tax-service'
 import { BillService } from './billing/bill-service'
 import { BillingSettingsService } from './billing/settings-service'
+import { CustomerService } from './customers/customer-service'
+import { InventoryService } from './inventory/inventory-service'
+import { RecipeService } from './inventory/recipe-service'
+import { ReservationService } from './reservations/reservation-service'
 import { KotService } from './kitchen/kot-service'
 import { NetworkPrinterDriver, type PrinterDrivers } from './printing/drivers'
 import { PrinterService } from './printing/printer-service'
@@ -51,6 +55,10 @@ export interface Services {
   billingSettings: BillingSettingsService
   bills: BillService
   receipts: ReceiptService
+  customers: CustomerService
+  reservations: ReservationService
+  inventory: InventoryService
+  recipes: RecipeService
 }
 
 export interface ServiceDeps {
@@ -87,13 +95,15 @@ export function createServices(deps: ServiceDeps): Services {
 
   const categories = new CategoryService(deps.db, audit)
   const items = new ItemService(deps.db, audit)
-  const kots = new KotService(deps.db, audit, clock)
+  const inventory = new InventoryService(deps.db, audit, clock)
+  const kots = new KotService(deps.db, audit, clock, inventory)
   const printers = new PrinterService(deps.db, audit)
   const billingSettings = new BillingSettingsService(deps.db, audit)
   const drivers: PrinterDrivers = { NETWORK: new NetworkPrinterDriver(), ...deps.printDrivers }
   const print = new PrintService(deps.db, audit, clock, kots, printers, drivers, deps.logger)
   const bills = new BillService(deps.db, audit, clock, billingSettings)
-  const orders = new OrderService(deps.db, audit, clock, kots)
+  const orders = new OrderService(deps.db, audit, clock, kots, inventory)
+  const tables = new TableService(deps.db, audit, clock)
 
   return {
     audit,
@@ -103,7 +113,7 @@ export function createServices(deps: ServiceDeps): Services {
     users: new UserService(deps.db, audit, auth),
     roles: new RoleService(deps.db, audit),
     areas: new AreaService(deps.db, audit),
-    tables: new TableService(deps.db, audit, clock),
+    tables,
     tableOps: new TableOperationService(deps.db, audit, clock, kots, orders),
     stations: new StationService(deps.db, audit),
     categories,
@@ -118,6 +128,10 @@ export function createServices(deps: ServiceDeps): Services {
     orderCatalog: new OrderCatalogService(items, categories),
     billingSettings,
     bills,
-    receipts: new ReceiptService(deps.db, audit, bills, print, printers, deps.logger)
+    receipts: new ReceiptService(deps.db, audit, bills, print, printers, deps.logger),
+    customers: new CustomerService(deps.db, audit),
+    reservations: new ReservationService(deps.db, audit, clock, tables),
+    inventory,
+    recipes: new RecipeService(deps.db, audit)
   }
 }

@@ -10,6 +10,7 @@ import {
   Receipt,
   RotateCcw,
   Save,
+  Truck,
   XCircle
 } from 'lucide-react'
 import { useState } from 'react'
@@ -19,9 +20,9 @@ import {
   CLOSED_ORDER_STATUSES,
   createOrderInputSchema,
   EDITABLE_ORDER_STATUSES,
-  ORDER_STATUS_LABELS,
   ORDER_TYPE_LABELS,
   ORDER_TYPES,
+  orderStatusLabelFor,
   updateOrderInputSchema,
   type OrderDetail,
   type OrderLine,
@@ -48,6 +49,7 @@ import {
   type NewCartLine
 } from '@/modules/orders/cart'
 import { CatalogBrowser } from '@/modules/orders/CatalogBrowser'
+import { DispatchDialog } from '@/modules/orders/DispatchDialog'
 import { ORDER_KEYS, ORDER_REFRESH_MS, useRefreshOrders } from '@/modules/orders/hooks'
 import { ItemDialog } from '@/modules/orders/ItemDialog'
 import { ORDER_STATUS_TONE } from '@/modules/orders/order-status'
@@ -203,12 +205,15 @@ function OrderScreen({ order, seed }: { order: OrderDetail | null; seed: NewOrde
   const [confirming, setConfirming] = useState<Confirming>(null)
   const [editingDetails, setEditingDetails] = useState(false)
   const [transferring, setTransferring] = useState(false)
+  const [dispatching, setDispatching] = useState(false)
   const [notice, setNotice] = useState<string | null>(noticeFrom(location.state))
   const [preview, setPreview] = useState<PreviewRequest | null>(previewFrom(location.state))
 
   const status = order?.status ?? null
   const closed = status !== null && CLOSED_ORDER_STATUSES.includes(status)
-  const editable = canOperate && (status === null || EDITABLE_ORDER_STATUSES.includes(status))
+  const outForDelivery = order !== null && order.dispatchedAt !== null && status !== 'SERVED'
+  const editable =
+    canOperate && !outForDelivery && (status === null || EDITABLE_ORDER_STATUSES.includes(status))
   const tableId = order?.tableId ?? seed?.tableId ?? null
 
   const catalog = useQuery({
@@ -396,8 +401,21 @@ function OrderScreen({ order, seed }: { order: OrderDetail | null; seed: NewOrde
   const unsent = order?.hasUnsentLines ?? false
   const busy = act.isPending
   const canSend = editable && (hasNew || unsent)
+  const isDelivery = order?.type === 'DELIVERY'
+  const canDispatch = canOperate && isDelivery && status === 'READY' && !hasNew && !unsent
   const canServe =
-    canOperate && status !== null && KITCHEN_STATUSES.includes(status) && !hasNew && !unsent
+    canOperate &&
+    status !== null &&
+    KITCHEN_STATUSES.includes(status) &&
+    !hasNew &&
+    !unsent &&
+    (!isDelivery || outForDelivery)
+  const serveLabel =
+    order?.type === 'DELIVERY'
+      ? 'Mark delivered'
+      : order?.type === 'DINE_IN'
+        ? 'Mark served'
+        : 'Mark handed over'
   const cancellable =
     status !== null &&
     CANCELLABLE_ORDER_STATUSES.includes(status) &&
@@ -427,7 +445,9 @@ function OrderScreen({ order, seed }: { order: OrderDetail | null; seed: NewOrde
             {order && ` · by ${order.createdByName}`}
           </p>
         </div>
-        {status && <Badge variant={ORDER_STATUS_TONE[status]}>{ORDER_STATUS_LABELS[status]}</Badge>}
+        {order && (
+          <Badge variant={ORDER_STATUS_TONE[order.status]}>{orderStatusLabelFor(order)}</Badge>
+        )}
 
         {order === null && type !== 'DINE_IN' && (
           <div className="ml-4 flex gap-1" role="group" aria-label="Order type">
@@ -547,6 +567,23 @@ function OrderScreen({ order, seed }: { order: OrderDetail | null; seed: NewOrde
           {order?.deliveryAddress && (
             <p className="text-xs text-muted-foreground">Deliver to: {order.deliveryAddress}</p>
           )}
+          {order?.promisedAt && !closed && (
+            <p className="text-xs text-muted-foreground">
+              {isDelivery ? 'Deliver by' : 'Ready by'}:{' '}
+              {new Date(order.promisedAt).toLocaleString([], {
+                hour: '2-digit',
+                minute: '2-digit',
+                day: 'numeric',
+                month: 'short'
+              })}
+            </p>
+          )}
+          {order?.riderName && (
+            <p className="text-xs text-muted-foreground">
+              Rider: {order.riderName}
+              {order.riderPhone && ` · ${order.riderPhone}`}
+            </p>
+          )}
           {order?.notes && <p className="text-xs text-muted-foreground">Note: {order.notes}</p>}
           {order && order.kots.length > 0 && (
             <OrderTickets
@@ -584,6 +621,31 @@ function OrderScreen({ order, seed }: { order: OrderDetail | null; seed: NewOrde
                 Send to kitchen
               </Button>
             )}
+            {canDispatch && (
+              <Button
+                className="col-span-2"
+                disabled={busy}
+                onClick={() => {
+                  act.reset()
+                  setDispatching(true)
+                }}
+              >
+                <Truck /> Send out for delivery
+              </Button>
+            )}
+            {canOperate && outForDelivery && status === 'READY' && (
+              <Button
+                variant="outline"
+                className="col-span-2"
+                disabled={busy}
+                onClick={() => {
+                  act.reset()
+                  setDispatching(true)
+                }}
+              >
+                <Truck /> Change rider
+              </Button>
+            )}
             {canServe && (
               <Button
                 variant="secondary"
@@ -593,7 +655,7 @@ function OrderScreen({ order, seed }: { order: OrderDetail | null; seed: NewOrde
                   moveTo('SERVED')
                 }}
               >
-                <CheckCheck /> Mark served
+                <CheckCheck /> {serveLabel}
               </Button>
             )}
             {order?.bill && canViewBills && (
@@ -723,6 +785,15 @@ function OrderScreen({ order, seed }: { order: OrderDetail | null; seed: NewOrde
       )}
 
       {order && (
+        <DispatchDialog
+          order={dispatching ? order : null}
+          onClose={() => {
+            setDispatching(false)
+          }}
+        />
+      )}
+
+      {order && (
         <DetailsDialog
           open={editingDetails}
           order={order}
@@ -745,6 +816,9 @@ function ReadOnlySummary({
   order: OrderDetail | null
   canOperate: boolean
 }) {
+  const canViewCustomers = usePermission('customers.view')
+  const canAdmin = usePermission('admin.access')
+  const canOpenCustomer = canViewCustomers && canAdmin
   if (!order) {
     return (
       <p className="px-6 py-16 text-center text-sm text-muted-foreground">
@@ -753,13 +827,15 @@ function ReadOnlySummary({
     )
   }
   const rows: [string, string | null][] = [
-    ['Status', ORDER_STATUS_LABELS[order.status]],
+    ['Status', orderStatusLabelFor(order)],
     ['Type', ORDER_TYPE_LABELS[order.type]],
     ['Table', order.tableName],
     ['Guests', order.guestCount === null ? null : String(order.guestCount)],
     ['Customer', order.customerName],
     ['Phone', order.customerPhone],
     ['Address', order.deliveryAddress],
+    ['Rider', order.riderName],
+    ['Rider phone', order.riderPhone],
     ['Notes', order.notes],
     ['Cancelled because', order.cancelReason],
     ['Subtotal', formatMoney(order.subtotal)]
@@ -781,6 +857,14 @@ function ReadOnlySummary({
             </div>
           ))}
       </dl>
+      {order.customerId && canOpenCustomer && (
+        <Link
+          to={`/admin/customers?customer=${order.customerId}`}
+          className="block text-center text-sm font-medium text-primary hover:underline"
+        >
+          Open customer record
+        </Link>
+      )}
     </div>
   )
 }

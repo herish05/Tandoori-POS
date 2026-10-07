@@ -1,5 +1,13 @@
 import { useMutation } from '@tanstack/react-query'
-import { Ban, ClipboardList, DoorClosed, DoorOpen, Loader2, LockOpen } from 'lucide-react'
+import {
+  Ban,
+  CalendarClock,
+  ClipboardList,
+  DoorClosed,
+  DoorOpen,
+  Loader2,
+  LockOpen
+} from 'lucide-react'
 import { useState, type SyntheticEvent } from 'react'
 import { openTableInputSchema, TABLE_TYPE_LABELS, type DiningTable } from '@shared/tables'
 import { Badge } from '@/components/ui/badge'
@@ -8,9 +16,13 @@ import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { fieldErrors } from '@/lib/form'
 import { toUserMessage } from '@/lib/ipc'
+import { useRefreshReservations } from '@/modules/reservations/hooks'
+import { reservationService } from '@/services/reservations.service'
 import { tableService } from '@/services/tables.service'
+import { usePermission } from '@/stores/auth.store'
 import { useRefreshTables } from './hooks'
 import { TABLE_STATUS_META } from './table-status'
+import { formatReservedTime } from './table-time'
 
 interface TableActionsProps {
   table: DiningTable
@@ -33,6 +45,8 @@ export function TableActions({
   onCancel
 }: TableActionsProps) {
   const refresh = useRefreshTables()
+  const refreshReservations = useRefreshReservations()
+  const canSeatBooking = usePermission('reservations.operate')
   const [guests, setGuests] = useState('')
   const [guestError, setGuestError] = useState<string | undefined>()
 
@@ -59,6 +73,18 @@ export function TableActions({
     onError: () => {
       // The floor may have changed under us; show the latest state behind the message.
       void refresh()
+    }
+  })
+
+  const seatBooking = useMutation({
+    mutationFn: (reservationId: string) =>
+      reservationService.seat({ id: reservationId, tableId: table.id }),
+    onSuccess: async () => {
+      await refreshReservations()
+      onDone()
+    },
+    onError: () => {
+      void refreshReservations()
     }
   })
 
@@ -106,6 +132,32 @@ export function TableActions({
         <p className="rounded-md bg-secondary px-3 py-2 text-sm text-muted-foreground">
           You can view tables but your role does not allow opening or closing them.
         </p>
+      )}
+
+      {table.reservationId !== null && table.reservedFor !== null && (
+        <div className="space-y-2 rounded-md border border-dashed p-3 text-sm">
+          <p className="flex items-center gap-2 font-semibold">
+            <CalendarClock className="size-4" aria-hidden />
+            Booked for {table.reservedName ?? 'a guest'} at {formatReservedTime(table.reservedFor)}
+          </p>
+          {canOperate && canSeatBooking && canOpen && (
+            <Button
+              className="w-full"
+              disabled={seatBooking.isPending}
+              onClick={() => {
+                if (table.reservationId) seatBooking.mutate(table.reservationId)
+              }}
+            >
+              {seatBooking.isPending && <Loader2 className="animate-spin" aria-hidden />}
+              Guests arrived: seat them here
+            </Button>
+          )}
+          {seatBooking.isError && (
+            <p role="alert" className="font-medium text-destructive">
+              {toUserMessage(seatBooking.error)}
+            </p>
+          )}
+        </div>
       )}
 
       {showTakeOrder && !canOpen && (

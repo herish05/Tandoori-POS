@@ -19,10 +19,18 @@ import { Select } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { fieldErrors } from '@/lib/form'
 import { toUserMessage } from '@/lib/ipc'
-import { bpsToInput, formatPercent, parsePercentToBps } from '@/lib/money'
+import {
+  bpsToInput,
+  formatPercent,
+  paiseToInput,
+  parseOptionalRupees,
+  parsePercentToBps
+} from '@/lib/money'
 import { BILL_KEYS } from '@/modules/billing/hooks'
 import { billingSettingsService } from '@/services/billing.service'
 import { usePermission } from '@/stores/auth.store'
+
+const percentOrNaN = (text: string): number => (text.trim() === '' ? 0 : parsePercentToBps(text))
 
 function SettingsForm({ settings }: { settings: BillingSettings }) {
   const queryClient = useQueryClient()
@@ -32,6 +40,13 @@ function SettingsForm({ settings }: { settings: BillingSettings }) {
   const [dineInOnly, setDineInOnly] = useState(settings.serviceChargeDineInOnly)
   const [taxable, setTaxable] = useState(settings.serviceChargeTaxable)
   const [roundOffUnit, setRoundOffUnit] = useState<RoundOffUnit>(settings.roundOffUnit)
+  const [deliveryCharge, setDeliveryCharge] = useState(paiseToInput(settings.deliveryCharge))
+  const [deliveryFreeAbove, setDeliveryFreeAbove] = useState(
+    paiseToInput(settings.deliveryFreeAbove)
+  )
+  const [deliveryTax, setDeliveryTax] = useState(bpsToInput(settings.deliveryChargeTaxBps))
+  const [packagingCharge, setPackagingCharge] = useState(paiseToInput(settings.packagingCharge))
+  const [packagingTax, setPackagingTax] = useState(bpsToInput(settings.packagingChargeTaxBps))
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [autoPrint, setAutoPrint] = useState(settings.autoPrintReceipt)
   const [savedAt, setSavedAt] = useState(false)
@@ -52,7 +67,12 @@ function SettingsForm({ settings }: { settings: BillingSettings }) {
       serviceChargeDineInOnly: dineInOnly,
       serviceChargeTaxable: taxable,
       roundOffUnit,
-      autoPrintReceipt: autoPrint
+      autoPrintReceipt: autoPrint,
+      deliveryCharge: parseOptionalRupees(deliveryCharge),
+      deliveryFreeAbove: parseOptionalRupees(deliveryFreeAbove),
+      deliveryChargeTaxBps: percentOrNaN(deliveryTax),
+      packagingCharge: parseOptionalRupees(packagingCharge),
+      packagingChargeTaxBps: percentOrNaN(packagingTax)
     })
     if (!parsed.success) {
       setErrors(fieldErrors(parsed.error))
@@ -149,6 +169,45 @@ function SettingsForm({ settings }: { settings: BillingSettings }) {
         />
         Print the receipt automatically after payment
       </label>
+
+      <fieldset className="space-y-3 rounded-md border p-4">
+        <legend className="px-1 text-sm font-semibold">Delivery and packaging</legend>
+        <p className="text-xs text-muted-foreground">
+          Flat charges added to delivery and takeaway bills. They are not discounted and carry no
+          service charge. Leave 0 for none.
+        </p>
+        <div className="grid grid-cols-3 gap-3">
+          {(
+            [
+              ['Delivery charge (Rs)', deliveryCharge, setDeliveryCharge, 'deliveryCharge'],
+              [
+                'Free delivery above (Rs)',
+                deliveryFreeAbove,
+                setDeliveryFreeAbove,
+                'deliveryFreeAbove'
+              ],
+              ['GST on delivery (%)', deliveryTax, setDeliveryTax, 'deliveryChargeTaxBps'],
+              ['Packaging charge (Rs)', packagingCharge, setPackagingCharge, 'packagingCharge'],
+              ['GST on packaging (%)', packagingTax, setPackagingTax, 'packagingChargeTaxBps']
+            ] as const
+          ).map(([label, value, setter, key]) => (
+            <Field key={key} label={label} error={errors[key]}>
+              {(control) => (
+                <Input
+                  {...control}
+                  inputMode="decimal"
+                  disabled={!canManage}
+                  value={value}
+                  onChange={(event) => {
+                    setter(event.target.value)
+                    setSavedAt(false)
+                  }}
+                />
+              )}
+            </Field>
+          ))}
+        </div>
+      </fieldset>
 
       <Field label="Round off the total">
         {(control) => (

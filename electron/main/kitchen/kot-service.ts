@@ -17,6 +17,8 @@ import {
 import { AppError } from '../ipc/errors'
 import { requireRestaurantId } from '../restaurant/restaurant-service'
 import { moveOrderStatus, refreshOrderSubtotal, type OrderRow } from '../orders/order-state'
+import type { InventoryService } from '../inventory/inventory-service'
+import { RESTOCKABLE_KOT_STATUSES } from '@shared/inventory'
 import { nextDocumentNumber } from '../orders/numbering'
 import {
   KOT_STATUS_LABELS,
@@ -58,6 +60,10 @@ const escapeLike = (text: string): string => text.replace(/[\\%_]/g, (match) => 
 
 const iso = (value: Date | null): string | null => (value ? value.toISOString() : null)
 
+/** Food the cook has not started yet can still be put back into stock when it is cancelled. */
+const isRestockable = (status: KotStatus): boolean =>
+  (RESTOCKABLE_KOT_STATUSES as readonly string[]).includes(status)
+
 /**
  * Kitchen order tickets. A ticket is issued when an order is sent: one per kitchen station, each
  * holding a copy of the lines for that station. Later sends issue additional tickets; an issued
@@ -68,7 +74,8 @@ export class KotService {
   constructor(
     private readonly db: AppDatabase,
     private readonly audit: AuditService,
-    private readonly clock: Clock
+    private readonly clock: Clock,
+    private readonly inventory: InventoryService
   ) {}
 
   // --- Reads -------------------------------------------------------------------------------
@@ -257,6 +264,14 @@ export class KotService {
       }
       const now = new Date(this.clock())
       const items = this.activeItems(tx, kot.id)
+      if (isRestockable(kot.status)) {
+        this.inventory.restore(
+          tx,
+          auth,
+          items.map((item) => item.orderItemId),
+          `Ticket ${kot.kotNumber} cancelled`
+        )
+      }
       for (const item of items) {
         this.cancelOrderLine(tx, auth, item.orderItemId, input.reason, now)
       }
@@ -309,6 +324,9 @@ export class KotService {
         .run()
       const kot = tx.select().from(kots).where(eq(kots.id, item.kotId)).get()
       if (!kot) continue
+      if (isRestockable(kot.status)) {
+        this.inventory.restore(tx, auth, [orderItemId], `${item.itemName} cancelled`)
+      }
       const nothingLeft = this.activeItems(tx, kot.id).length === 0
       if (nothingLeft && kot.status !== 'CANCELLED' && kot.status !== 'SERVED') {
         this.cancelTicket(tx, kot, 'Every item on this ticket was cancelled.', now, auth.userId)
@@ -348,6 +366,14 @@ export class KotService {
       )
       .all()
     for (const kot of open) {
+      if (isRestockable(kot.status)) {
+        this.inventory.restore(
+          tx,
+          auth,
+          this.activeItems(tx, kot.id).map((item) => item.orderItemId),
+          'Order cancelled'
+        )
+      }
       for (const item of this.activeItems(tx, kot.id)) {
         tx.update(kotItems)
           .set({
@@ -685,7 +711,10 @@ export class KotService {
       ...summary,
       items,
       orderNotes: order?.notes ?? null,
-      guestCount: order?.guestCount ?? null
+      guestCount: order?.guestCount ?? null,
+      customerPhone: order?.customerPhone ?? null,
+      deliveryAddress: order?.deliveryAddress ?? null,
+      promisedAt: iso(order?.promisedAt ?? null)
     }
   }
 }

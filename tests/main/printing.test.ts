@@ -63,6 +63,9 @@ const sampleKot = (overrides: Partial<KotDetail> = {}): KotDetail => ({
   cancelReason: null,
   orderNotes: null,
   guestCount: 4,
+  customerPhone: null,
+  deliveryAddress: null,
+  promisedAt: null,
   items: [
     {
       id: crypto.randomUUID(),

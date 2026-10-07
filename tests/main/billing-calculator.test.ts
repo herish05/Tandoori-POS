@@ -573,3 +573,86 @@ describe('allocatePayments', () => {
     }
   })
 })
+
+describe('delivery and packaging charges', () => {
+  const charges = {
+    deliveryCharge: 3000,
+    deliveryChargeTaxBps: 500,
+    packagingCharge: 1000,
+    packagingChargeTaxBps: 1800
+  }
+
+  it('changes nothing when there are no charges', () => {
+    const without = calculateBill({ lines: [line('a', 10000, 1, 500)], config: PLAIN })
+    const zero = calculateBill({
+      lines: [line('a', 10000, 1, 500)],
+      charges: {
+        deliveryCharge: 0,
+        deliveryChargeTaxBps: 500,
+        packagingCharge: 0,
+        packagingChargeTaxBps: 500
+      },
+      config: PLAIN
+    })
+    expect(zero).toEqual(without)
+    expect(without.deliveryCharge).toBe(0)
+    expect(without.packagingCharge).toBe(0)
+  })
+
+  it('adds each charge with its own GST, sharing a slab with the food at the same rate', () => {
+    const result = calculateBill({
+      lines: [line('a', 10000, 1, 500)],
+      charges,
+      config: PLAIN
+    })
+    expect(result.deliveryCharge).toBe(3000)
+    expect(result.packagingCharge).toBe(1000)
+    // 5%: food 100.00 + delivery 30.00; 18%: packaging 10.00.
+    expect(result.taxes).toEqual([
+      { component: 'CGST', rateBps: 500, taxableAmount: 13000, taxAmount: 325 },
+      { component: 'SGST', rateBps: 500, taxableAmount: 13000, taxAmount: 325 },
+      { component: 'CGST', rateBps: 1800, taxableAmount: 1000, taxAmount: 90 },
+      { component: 'SGST', rateBps: 1800, taxableAmount: 1000, taxAmount: 90 }
+    ])
+    expect(result.taxTotal).toBe(830)
+    expect(result.grandTotal).toBe(10000 + 3000 + 1000 + 830)
+  })
+
+  it('uses IGST between states and leaves an untaxed charge untaxed', () => {
+    const result = calculateBill({
+      lines: [line('a', 10000, 1)],
+      charges: { ...charges, packagingChargeTaxBps: 0 },
+      config: { ...PLAIN, taxMode: 'INTER_STATE' }
+    })
+    expect(result.taxes).toEqual([
+      { component: 'IGST', rateBps: 500, taxableAmount: 3000, taxAmount: 150 }
+    ])
+    expect(result.grandTotal).toBe(10000 + 3000 + 1000 + 150)
+  })
+
+  it('is neither discounted nor charged a service charge, and rounds with the bill', () => {
+    const result = calculateBill({
+      lines: [line('a', 10000, 1)],
+      billDiscount: pct(1000),
+      charges: { ...charges, deliveryChargeTaxBps: 0, packagingChargeTaxBps: 0 },
+      config: { ...PLAIN, serviceChargeBps: 1000, roundOffUnit: 100 }
+    })
+    expect(result.billDiscountTotal).toBe(1000)
+    expect(result.serviceCharge).toBe(900) // 10% of 90.00, not of the charges
+    expect(result.preRoundTotal).toBe(9000 + 900 + 3000 + 1000)
+    expect(result.grandTotal).toBe(13900)
+  })
+
+  it('refuses charges that are negative, fractional or out of range', () => {
+    const attempt = (extra: Partial<typeof charges>) => () =>
+      calculateBill({
+        lines: [line('a', 10000, 1)],
+        charges: { ...charges, ...extra },
+        config: PLAIN
+      })
+    expect(attempt({ deliveryCharge: -1 })).toThrow(BillCalculationError)
+    expect(attempt({ packagingCharge: 10.5 })).toThrow(BillCalculationError)
+    expect(attempt({ deliveryChargeTaxBps: 10_001 })).toThrow(BillCalculationError)
+    expect(attempt({ packagingCharge: 300_000_001 })).toThrow(BillCalculationError)
+  })
+})

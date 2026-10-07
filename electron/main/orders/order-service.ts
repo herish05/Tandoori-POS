@@ -19,7 +19,9 @@ import {
   users,
   bills
 } from '../db/schema'
+import { linkCustomer } from '../customers/customer-link'
 import type { KotService } from '../kitchen/kot-service'
+import type { InventoryService } from '../inventory/inventory-service'
 import { AppError } from '../ipc/errors'
 import { requireRestaurantId } from '../restaurant/restaurant-service'
 import {
@@ -28,13 +30,16 @@ import {
   EDITABLE_ORDER_STATUSES,
   KITCHEN_ORDER_STATUSES,
   MAX_ORDER_LINES,
+  MAX_PROMISE_AHEAD_MS,
   ORDER_STATUS_LABELS,
   ORDER_TRANSITIONS,
+  PROMISE_PAST_GRACE_MS,
   computeLineTotal,
   type AddItemsData,
   type CancelLineData,
   type CancelOrderData,
   type CreateOrderData,
+  type DispatchOrderData,
   type OrderDetail,
   type OrderFilterData,
   type OrderLine,
@@ -68,7 +73,8 @@ export class OrderService {
     private readonly db: AppDatabase,
     private readonly audit: AuditService,
     private readonly clock: Clock,
-    private readonly kots: KotService
+    private readonly kots: KotService,
+    private readonly inventory: InventoryService
   ) {}
 
   // --- Reads -------------------------------------------------------------------------------
@@ -83,6 +89,7 @@ export class OrderService {
     }
     if (filter.type) conditions.push(eq(orders.type, filter.type))
     if (filter.tableId) conditions.push(eq(orders.tableId, filter.tableId))
+    if (filter.customerId) conditions.push(eq(orders.customerId, filter.customerId))
     if (filter.search) {
       const like = `%${escapeLike(filter.search)}%`
       conditions.push(
@@ -108,7 +115,20 @@ export class OrderService {
         this.claimTable(tx, auth, input.tableId, input.guestCount)
       }
 
+      const customerId = linkCustomer(
+        tx,
+        this.audit,
+        auth,
+        restaurantId,
+        {
+          name: input.customerName,
+          phone: input.customerPhone,
+          address: input.deliveryAddress
+        },
+        'order'
+      )
       const orderNumber = nextDocumentNumber(tx, restaurantId, 'ORD')
+      const promisedAt = this.promisedTime(input.type, input.promisedAt, true)
       const row = tx
         .insert(orders)
         .values({
@@ -118,10 +138,12 @@ export class OrderService {
           status: 'DRAFT',
           tableId: input.type === 'DINE_IN' ? input.tableId : null,
           guestCount: input.type === 'DINE_IN' ? input.guestCount : null,
+          customerId,
           customerName: input.customerName,
           customerPhone: input.customerPhone,
           deliveryAddress: input.deliveryAddress,
           notes: input.notes,
+          promisedAt,
           createdBy: auth.userId
         })
         .returning()
@@ -133,7 +155,8 @@ export class OrderService {
         type: row.type,
         tableId: row.tableId,
         lines: input.lines.length,
-        subtotal
+        subtotal,
+        promisedAt: promisedAt?.toISOString() ?? null
       })
       return row.id
     })
@@ -158,20 +181,38 @@ export class OrderService {
         }
       }
       const guestCount = order.type === 'DINE_IN' ? input.guestCount : null
+      const customerId = linkCustomer(
+        tx,
+        this.audit,
+        auth,
+        order.restaurantId,
+        {
+          name: input.customerName,
+          phone: input.customerPhone,
+          address: input.deliveryAddress
+        },
+        'order'
+      )
       const next = {
         guestCount,
+        customerId,
         customerName: input.customerName,
         customerPhone: input.customerPhone,
         deliveryAddress: input.deliveryAddress,
         notes: input.notes
       }
-      const changed = (Object.keys(next) as (keyof typeof next)[]).filter(
+      const changed: string[] = (Object.keys(next) as (keyof typeof next)[]).filter(
         (field) => next[field] !== order[field]
       )
+      // A promised time already on the order may stay as it is even once it has passed.
+      const promisedAt = this.promisedTime(order.type, input.promisedAt, false, order.promisedAt)
+      if ((promisedAt?.getTime() ?? null) !== (order.promisedAt?.getTime() ?? null)) {
+        changed.push('promisedAt')
+      }
       if (changed.length === 0) return
 
       tx.update(orders)
-        .set({ ...next, ...markModified(orders) })
+        .set({ ...next, promisedAt, ...markModified(orders) })
         .where(eq(orders.id, order.id))
         .run()
       if (order.tableId && changed.includes('guestCount')) {
@@ -341,6 +382,7 @@ export class OrderService {
         .run()
 
       const issued = this.kots.issue(tx, auth, order, pending)
+      this.inventory.consume(tx, auth, order.id, pending)
       this.kots.syncOrderStatus(tx, order.id)
       const after = this.requireOrder(tx, order.id)
       if (!after.confirmedAt) {
@@ -396,14 +438,98 @@ export class OrderService {
       if (input.status === 'BILL_REQUESTED' && !lines.some((line) => line.status !== 'CANCELLED')) {
         throw new AppError('CONFLICT', 'There is nothing to bill on this order.')
       }
+      if (input.status === 'SERVED' && order.type === 'DELIVERY' && !order.dispatchedAt) {
+        throw new AppError(
+          'CONFLICT',
+          'Send the delivery out with a rider before marking it delivered.'
+        )
+      }
       if (input.status === 'SERVED') this.kots.onOrderServed(tx, order.id)
-      this.moveOrder(tx, order, input.status)
+      const handover =
+        input.status === 'SERVED' && order.type !== 'DINE_IN' && !order.handedOverAt
+          ? { handedOverAt: new Date(this.clock()) }
+          : {}
+      this.moveOrder(tx, order, input.status, handover)
       this.record(tx, auth, 'order.status_changed', order, {
         statusFrom: order.status,
         statusTo: input.status
       })
     })
     return this.get(input.id)
+  }
+
+  /**
+   * Sends a delivery out with a rider once the kitchen has it ready. Doing it again while the
+   * order is still out hands it to another rider. The items are locked while it is on the road.
+   */
+  dispatch(auth: AuthContext, input: DispatchOrderData): OrderDetail {
+    this.db.transaction((tx) => {
+      const order = this.requireOrder(tx, input.orderId)
+      this.assertOpen(order)
+      if (order.type !== 'DELIVERY') {
+        throw new AppError('CONFLICT', 'Only a delivery order goes out with a rider.')
+      }
+      if (order.status !== 'READY') {
+        throw new AppError(
+          'CONFLICT',
+          order.status === 'SERVED' || order.status === 'BILL_REQUESTED'
+            ? 'This delivery was already delivered.'
+            : 'The kitchen has not finished this order yet.'
+        )
+      }
+      if (!input.riderName.trim()) {
+        throw new AppError('VALIDATION_ERROR', 'Enter the rider name.')
+      }
+      const now = new Date(this.clock())
+      const result = tx
+        .update(orders)
+        .set({
+          riderName: input.riderName,
+          riderPhone: input.riderPhone,
+          dispatchedAt: order.dispatchedAt ?? now,
+          dispatchedBy: order.dispatchedAt ? order.dispatchedBy : auth.userId,
+          ...markModified(orders)
+        })
+        .where(and(eq(orders.id, order.id), eq(orders.status, 'READY')))
+        .run()
+      if (result.changes !== 1) {
+        throw new AppError('CONFLICT', 'This order was just changed somewhere else. Reopen it.')
+      }
+      this.record(tx, auth, 'order.dispatched', order, {
+        riderName: input.riderName,
+        riderPhone: input.riderPhone,
+        reassigned: order.dispatchedAt !== null,
+        previousRider: order.riderName
+      })
+    })
+    return this.get(input.orderId)
+  }
+
+  /**
+   * The time promised to the customer. Only takeaway, pickup and delivery have one. A new order
+   * cannot be promised in the past; later edits may keep a time that has since passed.
+   */
+  private promisedTime(
+    type: OrderRow['type'],
+    value: string | null,
+    creating: boolean,
+    current: Date | null = null
+  ): Date | null {
+    if (type === 'DINE_IN' || value === null) return null
+    const time = new Date(value)
+    if (Number.isNaN(time.getTime())) throw new AppError('VALIDATION_ERROR', 'Enter a valid time.')
+    if (time.getTime() === current?.getTime()) return current
+    const now = this.clock()
+    if (time.getTime() > now + MAX_PROMISE_AHEAD_MS) {
+      throw new AppError('VALIDATION_ERROR', 'The time cannot be more than 7 days ahead.')
+    }
+    if (time.getTime() < now - PROMISE_PAST_GRACE_MS) {
+      throw new AppError(
+        'VALIDATION_ERROR',
+        creating ? 'The time has already passed.' : 'Choose a time that has not passed.'
+      )
+    }
+    return time
   }
 
   /**
@@ -742,6 +868,12 @@ export class OrderService {
         'The bill was requested. Reopen the order (mark it served) to change items.'
       )
     }
+    if (order.dispatchedAt && order.status !== 'SERVED') {
+      throw new AppError(
+        'CONFLICT',
+        'This delivery is out with a rider. Items can no longer change.'
+      )
+    }
   }
 
   private uncancellableMessage(status: OrderStatus): string {
@@ -826,8 +958,14 @@ export class OrderService {
       tableName,
       areaName,
       guestCount: order.guestCount,
+      customerId: order.customerId,
       customerName: order.customerName,
       customerPhone: order.customerPhone,
+      promisedAt: order.promisedAt?.toISOString() ?? null,
+      riderName: order.riderName,
+      riderPhone: order.riderPhone,
+      dispatchedAt: order.dispatchedAt?.toISOString() ?? null,
+      handedOverAt: order.handedOverAt?.toISOString() ?? null,
       itemCount: itemCount.get(order.id) ?? 0,
       subtotal: order.subtotal,
       createdByName,

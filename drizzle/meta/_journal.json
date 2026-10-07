@@ -64,6 +64,27 @@
       "when": 1791347244016,
       "tag": "0008_table_operations",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1791348681025,
+      "tag": "0009_delivery_and_pickup",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1791350725809,
+      "tag": "0010_customers_and_reservations",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1791356074243,
+      "tag": "0011_inventory_and_recipes",
+      "breakpoints": true
     }
   ]
 }

@@ -86,6 +86,7 @@ import type {
   CancelLineInput,
   CancelOrderInput,
   CreateOrderInput,
+  DispatchOrderInput,
   OrderDetail,
   OrderFilterInput,
   OrderSummary,
@@ -96,6 +97,41 @@ import type {
   UpdateOrderInput
 } from './orders'
 import type { MergeTablesInput, ShiftTableInput } from './table-ops'
+import type {
+  AddAddressInput,
+  CreateCustomerInput,
+  CustomerDetail,
+  CustomerFilterInput,
+  CustomerLookupInput,
+  CustomerLookupResult,
+  CustomerSummary,
+  UpdateAddressInput,
+  UpdateCustomerInput
+} from './customers'
+import type {
+  CancelReservationInput,
+  CreateReservationInput,
+  Reservation,
+  ReservationFilterInput,
+  SeatReservationInput,
+  UpdateReservationInput
+} from './reservations'
+import type {
+  CreateInventoryItemInput,
+  InventoryFilterInput,
+  InventoryItem,
+  InventorySummary,
+  MovementFilterInput,
+  Recipe,
+  RecipeCoverage,
+  SetInventoryItemActiveInput,
+  SetRecipeInput,
+  StockCountInput,
+  StockInInput,
+  StockMovement,
+  UpdateInventoryItemInput,
+  WastageInput
+} from './inventory'
 import type {
   AreaSummary,
   CreateAreaInput,
@@ -253,6 +289,7 @@ export interface TandooriApi {
     cancelLine: (input: CancelLineInput) => Promise<IpcResult<OrderDetail>>
     send: (id: string) => Promise<IpcResult<SendOrderResult>>
     setStatus: (input: SetOrderStatusInput) => Promise<IpcResult<OrderDetail>>
+    dispatch: (input: DispatchOrderInput) => Promise<IpcResult<OrderDetail>>
     cancel: (input: CancelOrderInput) => Promise<IpcResult<OrderDetail>>
   }
   kots: {
@@ -282,6 +319,43 @@ export interface TandooriApi {
     preview: (input: ReceiptPreviewInput) => Promise<IpcResult<ReceiptPreview>>
     print: (input: PrintReceiptInput) => Promise<IpcResult<ReceiptPrintOutcome>>
     history: (billId: string) => Promise<IpcResult<ReceiptPrintRecord[]>>
+  }
+  customers: {
+    list: (filter: CustomerFilterInput) => Promise<IpcResult<CustomerSummary[]>>
+    get: (id: string) => Promise<IpcResult<CustomerDetail>>
+    lookup: (input: CustomerLookupInput) => Promise<IpcResult<CustomerLookupResult[]>>
+    create: (input: CreateCustomerInput) => Promise<IpcResult<CustomerDetail>>
+    update: (input: UpdateCustomerInput) => Promise<IpcResult<CustomerDetail>>
+    delete: (id: string) => Promise<IpcResult<null>>
+    addAddress: (input: AddAddressInput) => Promise<IpcResult<CustomerDetail>>
+    updateAddress: (input: UpdateAddressInput) => Promise<IpcResult<CustomerDetail>>
+    removeAddress: (id: string) => Promise<IpcResult<CustomerDetail>>
+  }
+  reservations: {
+    list: (filter: ReservationFilterInput) => Promise<IpcResult<Reservation[]>>
+    get: (id: string) => Promise<IpcResult<Reservation>>
+    create: (input: CreateReservationInput) => Promise<IpcResult<Reservation>>
+    update: (input: UpdateReservationInput) => Promise<IpcResult<Reservation>>
+    cancel: (input: CancelReservationInput) => Promise<IpcResult<Reservation>>
+    noShow: (id: string) => Promise<IpcResult<Reservation>>
+    seat: (input: SeatReservationInput) => Promise<IpcResult<Reservation>>
+  }
+  inventory: {
+    summary: () => Promise<IpcResult<InventorySummary>>
+    list: (filter: InventoryFilterInput) => Promise<IpcResult<InventoryItem[]>>
+    create: (input: CreateInventoryItemInput) => Promise<IpcResult<InventoryItem>>
+    update: (input: UpdateInventoryItemInput) => Promise<IpcResult<InventoryItem>>
+    setActive: (input: SetInventoryItemActiveInput) => Promise<IpcResult<InventoryItem>>
+    delete: (id: string) => Promise<IpcResult<null>>
+    stockIn: (input: StockInInput) => Promise<IpcResult<InventoryItem>>
+    wastage: (input: WastageInput) => Promise<IpcResult<InventoryItem>>
+    count: (input: StockCountInput) => Promise<IpcResult<InventoryItem>>
+    movements: (filter: MovementFilterInput) => Promise<IpcResult<StockMovement[]>>
+  }
+  recipes: {
+    coverage: () => Promise<IpcResult<RecipeCoverage[]>>
+    get: (menuItemId: string) => Promise<IpcResult<Recipe>>
+    set: (input: SetRecipeInput) => Promise<IpcResult<Recipe>>
   }
   printers: {
     list: () => Promise<IpcResult<PrinterConfig[]>>

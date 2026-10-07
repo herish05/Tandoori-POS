@@ -78,10 +78,16 @@ export const ADMIN_NAV: AdminNavGroup[] = [
         label: 'Reservations',
         to: '/admin/reservations',
         icon: Calendar,
-        enabled: false,
-        phase: 12
+        enabled: true,
+        permission: 'reservations.view'
       },
-      { label: 'Customers', to: '/admin/customers', icon: Users, enabled: false, phase: 12 }
+      {
+        label: 'Customers',
+        to: '/admin/customers',
+        icon: Users,
+        enabled: true,
+        permission: 'customers.view'
+      }
     ]
   },
   {
@@ -99,7 +105,13 @@ export const ADMIN_NAV: AdminNavGroup[] = [
   {
     title: 'Stock & Finance',
     items: [
-      { label: 'Inventory', to: '/admin/inventory', icon: Boxes, enabled: false, phase: 13 },
+      {
+        label: 'Inventory',
+        to: '/admin/inventory',
+        icon: Boxes,
+        enabled: true,
+        permission: 'inventory.view'
+      },
       { label: 'Purchases', to: '/admin/purchases', icon: ShoppingCart, enabled: false, phase: 14 },
       { label: 'Suppliers', to: '/admin/suppliers', icon: Truck, enabled: false, phase: 14 },
       { label: 'Expenses', to: '/admin/expenses', icon: Wallet, enabled: false, phase: 15 },

@@ -6,6 +6,8 @@ export interface DetailsValues {
   customerPhone: string
   deliveryAddress: string
   notes: string
+  /** ISO time the customer was promised, or '' for none. */
+  promisedAt: string
 }
 
 export const EMPTY_DETAILS: DetailsValues = {
@@ -13,7 +15,8 @@ export const EMPTY_DETAILS: DetailsValues = {
   customerName: '',
   customerPhone: '',
   deliveryAddress: '',
-  notes: ''
+  notes: '',
+  promisedAt: ''
 }
 
 export function detailsFromOrder(order: OrderDetail): DetailsValues {
@@ -22,7 +25,8 @@ export function detailsFromOrder(order: OrderDetail): DetailsValues {
     customerName: order.customerName ?? '',
     customerPhone: order.customerPhone ?? '',
     deliveryAddress: order.deliveryAddress ?? '',
-    notes: order.notes ?? ''
+    notes: order.notes ?? '',
+    promisedAt: order.promisedAt ?? ''
   }
 }
 
@@ -34,6 +38,7 @@ export function detailsToInput(type: OrderType, values: DetailsValues) {
     customerName: values.customerName,
     customerPhone: values.customerPhone,
     deliveryAddress: type === 'DELIVERY' ? values.deliveryAddress : '',
-    notes: values.notes
+    notes: values.notes,
+    promisedAt: type === 'DINE_IN' ? '' : values.promisedAt
   }
 }

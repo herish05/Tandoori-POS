@@ -3,6 +3,7 @@ import type {
   CancelLineInput,
   CancelOrderInput,
   CreateOrderInput,
+  DispatchOrderInput,
   OrderDetail,
   OrderFilterInput,
   OrderSummary,
@@ -32,5 +33,7 @@ export const orderService = {
   send: (id: string): Promise<SendOrderResult> => unwrap(getApi().orders.send(id)),
   setStatus: (input: SetOrderStatusInput): Promise<OrderDetail> =>
     unwrap(getApi().orders.setStatus(input)),
+  dispatch: (input: DispatchOrderInput): Promise<OrderDetail> =>
+    unwrap(getApi().orders.dispatch(input)),
   cancel: (input: CancelOrderInput): Promise<OrderDetail> => unwrap(getApi().orders.cancel(input))
 }

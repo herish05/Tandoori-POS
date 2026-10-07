@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createRoleInputSchema, createStaffInputSchema } from '@shared/auth-schemas'
 import { IPC_CHANNELS } from '@shared/ipc-channels'
 import { createCategoryInputSchema, createItemInputSchema } from '@shared/menu'
-import type { OrderDetail } from '@shared/orders'
+import { createOrderInputSchema, type OrderDetail } from '@shared/orders'
 import type { PermissionCode } from '@shared/permissions'
 import type { IpcResult } from '@shared/types'
 import { registerAuthHandlers } from '@main/auth-handlers'
@@ -192,6 +192,54 @@ describe('order IPC', () => {
     expect(
       errorCode(await invoke(IPC_CHANNELS.ordersCancel, { id: order.id, reason: 'Customer left' }))
     ).toBe('FORBIDDEN')
+  })
+
+  it('sends a delivery out for the people who operate orders, and nobody else', async () => {
+    const owner = app.services.auth.authorize([])
+    const delivery = app.services.orders.create(
+      owner,
+      createOrderInputSchema.parse({
+        type: 'DELIVERY',
+        customerName: 'Gurpreet',
+        customerPhone: '98765 43210',
+        deliveryAddress: 'Near Bus Stand',
+        lines: [{ menuItemId: itemId, quantity: 1 }]
+      })
+    )
+    const sent = app.services.orders.sendAndGetKots(owner, delivery.id)
+    for (const id of sent.kotIds) {
+      for (const status of ['ACCEPTED', 'PREPARING', 'READY'] as const) {
+        app.services.kots.setStatus(owner, { id, status })
+      }
+    }
+    const rider = { orderId: delivery.id, riderName: 'Sukhi', riderPhone: '90000 11111' }
+
+    await signInWith('viewer', ['orders.view'])
+    expect(errorCode(await invoke(IPC_CHANNELS.ordersDispatch, rider))).toBe('FORBIDDEN')
+
+    app.services.auth.logout()
+    await loginAsOwner(app)
+    await signInWith('waiter', ['orders.view', 'orders.operate'])
+    expect(errorCode(await invoke(IPC_CHANNELS.ordersDispatch, { ...rider, riderName: '' }))).toBe(
+      'VALIDATION_ERROR'
+    )
+    expect(await invoke(IPC_CHANNELS.ordersDispatch, rider)).toMatchObject({
+      ok: true,
+      data: { riderName: 'Sukhi', status: 'READY' }
+    })
+  })
+
+  it('refuses to dispatch an order that is not a delivery', async () => {
+    const created = await invoke<OrderDetail>(IPC_CHANNELS.ordersCreate, {
+      type: 'TAKEAWAY',
+      lines: [{ menuItemId: itemId, quantity: 1 }]
+    })
+    const order = (created as { ok: true; data: OrderDetail }).data
+    expect(
+      errorCode(
+        await invoke(IPC_CHANNELS.ordersDispatch, { orderId: order.id, riderName: 'Sukhi' })
+      )
+    ).toBe('CONFLICT')
   })
 
   it('lets a manager with the cancel permission cancel', async () => {

@@ -143,6 +143,12 @@ export class BillService {
       const settings = this.settings.get(tx)
       const restaurantId = requireRestaurantId(tx)
       const chargeApplies = !settings.serviceChargeDineInOnly || order.type === 'DINE_IN'
+      // Flat charges: packaging on anything leaving the restaurant, delivery only when it is
+      // delivered and the food is below the free-delivery amount. They are copied onto the bill.
+      const delivery =
+        order.type === 'DELIVERY' &&
+        !(settings.deliveryFreeAbove > 0 && order.subtotal >= settings.deliveryFreeAbove)
+      const packaging = order.type !== 'DINE_IN'
       const bill = tx
         .insert(bills)
         .values({
@@ -152,6 +158,10 @@ export class BillService {
           taxMode: settings.taxMode,
           serviceChargeBps: chargeApplies ? settings.serviceChargeBps : 0,
           serviceChargeTaxable: settings.serviceChargeTaxable,
+          deliveryCharge: delivery ? settings.deliveryCharge : 0,
+          deliveryChargeTaxBps: delivery ? settings.deliveryChargeTaxBps : 0,
+          packagingCharge: packaging ? settings.packagingCharge : 0,
+          packagingChargeTaxBps: packaging ? settings.packagingChargeTaxBps : 0,
           roundOffUnit: settings.roundOffUnit,
           subtotal: 0,
           grandTotal: 0,
@@ -565,6 +575,12 @@ export class BillService {
           )
         })),
         billDiscount: spec(discounts.find((row) => row.scope === 'BILL')),
+        charges: {
+          deliveryCharge: bill.deliveryCharge,
+          deliveryChargeTaxBps: bill.deliveryChargeTaxBps,
+          packagingCharge: bill.packagingCharge,
+          packagingChargeTaxBps: bill.packagingChargeTaxBps
+        },
         config: {
           taxMode: bill.taxMode,
           serviceChargeBps: bill.serviceChargeBps,
@@ -876,6 +892,8 @@ export class BillService {
       discountedSubtotal: bill.subtotal - bill.itemDiscountTotal - bill.billDiscountTotal,
       serviceChargeBps: bill.serviceChargeBps,
       serviceCharge: bill.serviceCharge,
+      deliveryCharge: bill.deliveryCharge,
+      packagingCharge: bill.packagingCharge,
       taxMode: bill.taxMode,
       taxTotal: bill.taxTotal,
       roundOff: bill.roundOff,

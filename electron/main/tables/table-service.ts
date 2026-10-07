@@ -2,10 +2,11 @@ import { and, asc, eq, inArray, isNull, ne, notInArray, sql, type SQL } from 'dr
 import type { AuditService } from '../auth/audit-service'
 import type { AuthContext, AuditAction, Clock } from '../auth/types'
 import type { AppDatabase, DbExecutor } from '../db/client'
-import { areas, diningTables, markModified, orders, users } from '../db/schema'
+import { areas, diningTables, markModified, orders, reservations, users } from '../db/schema'
 import { AppError } from '../ipc/errors'
 import { requireRestaurantId } from '../restaurant/restaurant-service'
 import { CLOSED_ORDER_STATUSES } from '@shared/orders'
+import { RESERVED_LEAD_MS } from '@shared/reservations'
 import {
   FLOOR_GRID,
   IDLE_TABLE_STATUSES,
@@ -333,34 +334,39 @@ export class TableService {
 
   open(auth: AuthContext, input: OpenTableData): DiningTable {
     this.db.transaction((tx) => {
-      const current = this.requireTable(tx, input.id)
-      if (!current.isActive || !requireArea(tx, current.areaId).isActive) {
-        throw new AppError('CONFLICT', 'This table is not in use. Activate it first.')
-      }
-      if (!OPENABLE.includes(current.status)) {
-        throw new AppError('CONFLICT', unavailableMessage(current.status))
-      }
-      // Guarded by the expected status so two terminals can never both open the same table.
-      const result = tx
-        .update(diningTables)
-        .set({
-          status: 'OCCUPIED',
-          openedAt: new Date(this.clock()),
-          openedBy: auth.userId,
-          guestCount: input.guestCount ?? null,
-          ...markModified(diningTables)
-        })
-        .where(and(eq(diningTables.id, current.id), inArray(diningTables.status, [...OPENABLE])))
-        .run()
-      if (result.changes !== 1) {
-        throw new AppError('CONFLICT', 'This table was just opened somewhere else.')
-      }
-      this.record(tx, auth, 'table.opened', current.id, {
-        tableNumber: current.tableNumber,
-        guestCount: input.guestCount ?? null
-      })
+      this.openWithin(tx, auth, input)
     })
     return this.getById(input.id)
+  }
+
+  /** Opens a table inside the caller's transaction (used when seating a reservation). */
+  openWithin(tx: DbExecutor, auth: AuthContext, input: OpenTableData): void {
+    const current = this.requireTable(tx, input.id)
+    if (!current.isActive || !requireArea(tx, current.areaId).isActive) {
+      throw new AppError('CONFLICT', 'This table is not in use. Activate it first.')
+    }
+    if (!OPENABLE.includes(current.status)) {
+      throw new AppError('CONFLICT', unavailableMessage(current.status))
+    }
+    // Guarded by the expected status so two terminals can never both open the same table.
+    const result = tx
+      .update(diningTables)
+      .set({
+        status: 'OCCUPIED',
+        openedAt: new Date(this.clock()),
+        openedBy: auth.userId,
+        guestCount: input.guestCount ?? null,
+        ...markModified(diningTables)
+      })
+      .where(and(eq(diningTables.id, current.id), inArray(diningTables.status, [...OPENABLE])))
+      .run()
+    if (result.changes !== 1) {
+      throw new AppError('CONFLICT', 'This table was just opened somewhere else.')
+    }
+    this.record(tx, auth, 'table.opened', current.id, {
+      tableNumber: current.tableNumber,
+      guestCount: input.guestCount ?? null
+    })
   }
 
   close(auth: AuthContext, id: string): DiningTable {
@@ -518,24 +524,67 @@ export class TableService {
       .where(and(isNull(diningTables.deletedAt), isNull(areas.deletedAt), where))
       .all()
 
-    return rows.map(({ row, areaName, areaSort, openedByName }) => ({
-      areaSort,
-      table: {
-        id: row.id,
-        areaId: row.areaId,
-        areaName,
-        tableNumber: row.tableNumber,
-        displayName: row.displayName,
-        capacity: row.capacity,
-        type: row.type,
-        status: row.status,
-        positionX: row.positionX,
-        positionY: row.positionY,
-        isActive: row.isActive,
-        openedAt: row.openedAt ? row.openedAt.toISOString() : null,
-        openedByName,
-        guestCount: row.guestCount
+    const upcoming = this.upcomingBookings(rows.map(({ row }) => row.id))
+
+    return rows.map(({ row, areaName, areaSort, openedByName }) => {
+      const booking = row.status === 'AVAILABLE' ? upcoming.get(row.id) : undefined
+      return {
+        areaSort,
+        table: {
+          id: row.id,
+          areaId: row.areaId,
+          areaName,
+          tableNumber: row.tableNumber,
+          displayName: row.displayName,
+          capacity: row.capacity,
+          type: row.type,
+          status: booking ? 'RESERVED' : row.status,
+          positionX: row.positionX,
+          positionY: row.positionY,
+          isActive: row.isActive,
+          openedAt: row.openedAt ? row.openedAt.toISOString() : null,
+          openedByName,
+          guestCount: row.guestCount,
+          reservationId: booking?.id ?? null,
+          reservedFor: booking ? booking.reservedFor.toISOString() : null,
+          reservedName: booking?.guestName ?? null
+        }
       }
-    }))
+    })
+  }
+
+  /**
+   * The booking that holds each free table right now: one that starts within the next hour (or
+   * whose slot is still running), earliest first. A held table shows as reserved on the floor.
+   */
+  private upcomingBookings(
+    tableIds: string[]
+  ): Map<string, { id: string; reservedFor: Date; guestName: string }> {
+    const held = new Map<string, { id: string; reservedFor: Date; guestName: string }>()
+    if (tableIds.length === 0) return held
+    const now = this.clock()
+    const rows = this.db
+      .select({
+        id: reservations.id,
+        tableId: reservations.tableId,
+        reservedFor: reservations.reservedFor,
+        guestName: reservations.guestName
+      })
+      .from(reservations)
+      .where(
+        and(
+          inArray(reservations.tableId, tableIds),
+          eq(reservations.status, 'BOOKED'),
+          isNull(reservations.deletedAt),
+          sql`${reservations.reservedFor} <= ${now + RESERVED_LEAD_MS}`,
+          sql`${reservations.reservedFor} + ${reservations.durationMinutes} * 60000 > ${now}`
+        )
+      )
+      .orderBy(asc(reservations.reservedFor))
+      .all()
+    for (const row of rows) {
+      if (row.tableId && !held.has(row.tableId)) held.set(row.tableId, row)
+    }
+    return held
   }
 }

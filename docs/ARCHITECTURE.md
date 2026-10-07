@@ -242,6 +242,66 @@ Every handler is registered through `createIpcRegistrar`, which:
 - Not here yet: splitting or moving single sent items between orders, one party across joined tables,
   and a history screen for operations (they are in the audit log).
 
+## Takeaway, pickup and delivery (Phase 11)
+
+- Promised time (`orders.promised_at`): optional for takeaway, pickup and delivery; never for dine-in. At most
+  7 days ahead and at most 5 minutes in the past (an unchanged value is always kept). Printed on the kitchen
+  ticket as "Due by" (delivery) or "Ready by".
+- Dispatch (`orders:dispatch`, permission `orders.operate`): only a READY delivery can be sent out with a rider
+  name and optional phone. Reassigning the rider keeps the first dispatch time. While out, items cannot change,
+  and a delivery cannot be marked delivered (SERVED) before it is dispatched. Audit: `order.dispatched`.
+- Takeaway and pickup record `handed_over_at` when marked handed over. Labels come from `orderStatusLabelFor`
+  (Ready to dispatch, Out for delivery, Delivered, Ready for pickup, Handed over).
+- Charges: `billing_settings` holds a delivery charge, a free-delivery-above amount, a packaging charge and a
+  GST rate for each. They are snapshotted onto the bill, are not discounted, carry no service charge, and join
+  the GST slab of their rate. Delivery applies to delivery orders only; packaging to every non-dine-in order.
+- Migration `0009_delivery_and_pickup`: new columns, the bill-lock trigger extended to the charge columns, and
+  triggers refusing rider details on a non-delivery order or a promised time on a dine-in order.
+- Renderer: promised-time chips and picker, a dispatch dialog, order-screen buttons, and a "Pickup & delivery"
+  board on the POS home (kitchen / ready / out / done columns, late orders highlighted).
+- Not here yet: rider master list and cash settlement, delivery zones, delivery charge override, customer
+  records (Phase 12, below).
+
+## Customers and reservations (Phase 12)
+
+- Customers are matched by phone number only (normalised to digits). Records hold name, phone, email, notes,
+  saved addresses and an active flag; there is no merge, loyalty or coupon support yet.
+- Orders link to a customer through `customerId`; the order screen suggests customers while typing a phone
+  or name and offers saved-address chips. The customer record shows order and bill history.
+- Reservations (`BOOKED`, `SEATED`, `CANCELLED`, `NO_SHOW`) carry guest, party size, time, duration and an
+  optional table. Database triggers stop two live bookings overlapping on one table.
+- A booked table shows as RESERVED close to its time (derived, not stored). Seating a booking needs
+  `reservations.operate` and `tables.operate`; a no-show can only be marked once the time has passed.
+- Permissions: `customers.view|manage`, `reservations.view|operate`; customer lookup while taking an order
+  needs `orders.operate`.
+- Not here: deposits, reminders by SMS or WhatsApp, joined tables for large parties, auto-cancelling bookings
+  when a table is deactivated.
+
+## Inventory and recipes (Phase 13)
+
+- Stock items are raw materials with a unit (`KG`, `G`, `L`, `ML`, `PCS`), category, reorder level and a cost per
+  unit. Quantities are whole thousandths of the unit (2.5 kg is `2500`), so stock never drifts; money stays in paise.
+- Every change goes through an append-only ledger, `stock_movements` (`OPENING`, `STOCK_IN`, `ADJUSTMENT`,
+  `WASTAGE`, `CONSUMPTION`, `CONSUMPTION_REVERSAL`). Each row stores the balance after it. Triggers refuse any
+  update or delete of a row, and `onHand` on the item always equals the sum of its ledger.
+- Stock in may carry a price, which becomes the item's latest cost. Wastage needs a reason and cannot exceed what is
+  on hand. A stock count books the difference as an adjustment (nothing is written when it matches).
+- A recipe lists the ingredients of one portion. It is set per menu item as a shared recipe, and a size (variant) may
+  have its own; a size without one uses the shared recipe. The editor shows ingredient cost against selling price.
+- Stock is taken out when an order is sent and its kitchen ticket is issued, in the same transaction
+  (`InventoryService.consume`). It goes back (`restore`) when a line, an order or a ticket is cancelled while the
+  ticket is still `NEW` or `ACCEPTED`; once cooking has started the stock stays used. Restoring is done once per line.
+- Selling is never blocked by stock: it can go below zero, and the item shows as out.
+- An ingredient used by a recipe cannot be retired or deleted; an item with any history cannot be deleted, and its
+  unit is fixed once stock has been recorded.
+- Migration `0011_inventory_and_recipes`. Permissions: `inventory.view`, `inventory.operate` (stock in, wastage,
+  counts) and `inventory.manage` (items and recipes). Channels `inventory:*` and `recipes:*`; audit actions
+  `inventory.*`.
+- Renderer: Inventory page with Stock (summary, low-stock flags, stock in / wastage / count), Movements (the ledger,
+  filtered) and Recipes (menu items with coverage, a tab per size, ingredient editor).
+- Not here: add-ons and modifiers using stock, unit conversion (kg to g), weighted-average cost, batches and expiry,
+  transfers between locations, automatic sold-out, purchase orders and suppliers (Phase 14), reports (Phase 17).
+
 ## Touch screen and mouse
 
 The product is delivered on Windows terminals with a touch screen and a mouse, so every screen works with
@@ -263,17 +323,20 @@ Channels `app`, `security`, `sync`, `printer`, `database` -> JSON lines, daily f
 
 ## Phase plan
 
-| #   | Phase                                                                                                                                                              | Outcome                                                    |
-| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------- |
-| 1   | Foundation (done)                                                                                                                                                  | Shell, IPC, SQLite, migrations, logging, health, tests     |
-| 2   | Authentication and restaurant setup (done)                                                                                                                         | First-run setup, users, roles, password login, permissions |
-| 3   | Areas and tables (done)                                                                                                                                            | Table CRUD, table view with live status                    |
-| 4   | Menu management (done)                                                                                                                                             | Categories, items, variants, add-ons, taxes                |
-| 5   | Ordering (done)                                                                                                                                                    | Dine-in / takeaway / delivery orders, cart, hold           |
-| 6   | KOT and printing (done)                                                                                                                                            | Per-station KOTs, printer abstraction, preview fallback    |
-| 8   | Billing and payments (done)                                                                                                                                        | Bills, discounts, split, payment modes, settlement         |
-| 9   | Payment and receipt (done)                                                                                                                                         | 58/80 mm receipts, reprint audit, refunds                  |
-| 10  | Advanced table operations (done)                                                                                                                                   | Shift table, merge tables, operation records               |
-| 8+  | Printing, inventory, purchases, customers, reservations, reports, shifts/cash drawer, LAN sync, cloud backend and sync, backup/restore, installers and auto-update | Per the product spec                                       |
+| #   | Phase                                                                                                                                                              | Outcome                                                       |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------- |
+| 1   | Foundation (done)                                                                                                                                                  | Shell, IPC, SQLite, migrations, logging, health, tests        |
+| 2   | Authentication and restaurant setup (done)                                                                                                                         | First-run setup, users, roles, password login, permissions    |
+| 3   | Areas and tables (done)                                                                                                                                            | Table CRUD, table view with live status                       |
+| 4   | Menu management (done)                                                                                                                                             | Categories, items, variants, add-ons, taxes                   |
+| 5   | Ordering (done)                                                                                                                                                    | Dine-in / takeaway / delivery orders, cart, hold              |
+| 6   | KOT and printing (done)                                                                                                                                            | Per-station KOTs, printer abstraction, preview fallback       |
+| 8   | Billing and payments (done)                                                                                                                                        | Bills, discounts, split, payment modes, settlement            |
+| 9   | Payment and receipt (done)                                                                                                                                         | 58/80 mm receipts, reprint audit, refunds                     |
+| 10  | Advanced table operations (done)                                                                                                                                   | Shift table, merge tables, operation records                  |
+| 11  | Takeaway, pickup and delivery (done)                                                                                                                               | Promised time, rider dispatch, delivery and packaging charges |
+| 12  | Customers and reservations (done)                                                                                                                                  | Customer records, phone lookup, bookings, seating             |
+| 13  | Inventory and recipes (done)                                                                                                                                       | Stock items, ledger, recipes, auto-deduction on KOT           |
+| 8+  | Printing, inventory, purchases, customers, reservations, reports, shifts/cash drawer, LAN sync, cloud backend and sync, backup/restore, installers and auto-update | Per the product spec                                          |
 
 Each phase ships working, tested software with a written report; no phase starts until the previous one passes tests.

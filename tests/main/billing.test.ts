@@ -252,7 +252,12 @@ describe('billing', () => {
         serviceChargeDineInOnly: true,
         serviceChargeTaxable: true,
         roundOffUnit: 100,
-        autoPrintReceipt: false
+        autoPrintReceipt: false,
+        deliveryCharge: 0,
+        deliveryFreeAbove: 0,
+        deliveryChargeTaxBps: 0,
+        packagingCharge: 0,
+        packagingChargeTaxBps: 0
       })
     })
 

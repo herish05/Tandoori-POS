@@ -40,6 +40,10 @@ export const ROUND_OFF_LABELS: Record<RoundOffUnit, string> = {
 }
 
 export const MAX_SERVICE_CHARGE_BPS = 3000
+/** The most a flat delivery or packaging charge can be (Rs 10,000), in paise. */
+export const MAX_FLAT_CHARGE = 1_000_000
+/** The highest GST rate that can be put on those charges, in basis points. */
+export const MAX_CHARGE_TAX_BPS = 2800
 
 export interface BillingSettings {
   taxMode: TaxMode
@@ -52,6 +56,16 @@ export interface BillingSettings {
   roundOffUnit: RoundOffUnit
   /** Print the receipt as soon as a bill is paid (needs a printer set up). */
   autoPrintReceipt: boolean
+  /** Paise charged on every delivery bill; 0 = no delivery charge. */
+  deliveryCharge: number
+  /** A delivery whose items add up to at least this many paise is free; 0 = never free. */
+  deliveryFreeAbove: number
+  /** GST on the delivery charge, in basis points. */
+  deliveryChargeTaxBps: number
+  /** Paise charged once on every takeaway, pickup and delivery bill; 0 = none. */
+  packagingCharge: number
+  /** GST on the packaging charge, in basis points. */
+  packagingChargeTaxBps: number
 }
 
 export const DEFAULT_BILLING_SETTINGS: BillingSettings = {
@@ -60,7 +74,12 @@ export const DEFAULT_BILLING_SETTINGS: BillingSettings = {
   serviceChargeDineInOnly: true,
   serviceChargeTaxable: true,
   roundOffUnit: 100,
-  autoPrintReceipt: false
+  autoPrintReceipt: false,
+  deliveryCharge: 0,
+  deliveryFreeAbove: 0,
+  deliveryChargeTaxBps: 0,
+  packagingCharge: 0,
+  packagingChargeTaxBps: 0
 }
 
 // --- Discounts ---------------------------------------------------------------------------
@@ -228,6 +247,10 @@ export interface BillDetail extends BillSummary {
   discountedSubtotal: number
   serviceChargeBps: number
   serviceCharge: number
+  /** Paise charged for delivery on this bill; 0 when none. Not discounted; GST applies. */
+  deliveryCharge: number
+  /** Paise charged for packaging on this bill; 0 when none. */
+  packagingCharge: number
   taxMode: TaxMode
   taxTotal: number
   /** Rounding up or down to the round-off unit; negative when rounded down. */
@@ -268,6 +291,22 @@ const idSchema = z.uuid()
 const reason = (message: string) =>
   z.string(message).trim().min(3, message).max(200, 'The reason must be at most 200 characters.')
 
+const chargeAmount = (label: string) =>
+  z
+    .number(`Enter the ${label}.`)
+    .int('Enter a whole number of paise.')
+    .min(0, `The ${label} cannot be negative.`)
+    .max(MAX_FLAT_CHARGE, `The ${label} cannot be more than Rs 10,000.`)
+    .default(0)
+
+const chargeTax = (label: string) =>
+  z
+    .number(`Enter the GST on the ${label}.`)
+    .int('Enter a whole number of basis points.')
+    .min(0, 'GST cannot be negative.')
+    .max(MAX_CHARGE_TAX_BPS, 'GST cannot be more than 28%.')
+    .default(0)
+
 export const updateBillingSettingsInputSchema = z.object({
   taxMode: z.enum(TAX_MODES),
   serviceChargeBps: z
@@ -278,7 +317,12 @@ export const updateBillingSettingsInputSchema = z.object({
   serviceChargeDineInOnly: z.boolean(),
   serviceChargeTaxable: z.boolean(),
   roundOffUnit: z.union([z.literal(1), z.literal(10), z.literal(50), z.literal(100)]),
-  autoPrintReceipt: z.boolean().default(false)
+  autoPrintReceipt: z.boolean().default(false),
+  deliveryCharge: chargeAmount('delivery charge'),
+  deliveryFreeAbove: chargeAmount('free-delivery amount'),
+  deliveryChargeTaxBps: chargeTax('delivery charge'),
+  packagingCharge: chargeAmount('packaging charge'),
+  packagingChargeTaxBps: chargeTax('packaging charge')
 })
 
 export const generateBillInputSchema = z.object({ orderId: idSchema })

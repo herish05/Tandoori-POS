@@ -10,7 +10,8 @@ import type { BillTaxLine, DiscountType, RoundOffUnit, TaxMode } from '@shared/b
  *   - item discounts
  *   - bill discount (shared over the lines in proportion to their value)
  *   + service charge (on what is left; shared over the lines the same way)
- *   + GST per tax rate: CGST + SGST, or IGST
+ *   + delivery and packaging charges (flat; never discounted, no service charge on them)
+ *   + GST per tax rate: CGST + SGST, or IGST (the charges carry their own rate)
  *   +/- round off to the unit set in the billing settings
  *   = grand total
  */
@@ -51,9 +52,19 @@ export interface CalcConfig {
   roundOffUnit: RoundOffUnit
 }
 
+export interface CalcCharges {
+  /** Paise; 0 when there is no delivery charge on this bill. */
+  deliveryCharge: number
+  deliveryChargeTaxBps: number
+  packagingCharge: number
+  packagingChargeTaxBps: number
+}
+
 export interface CalcInput {
   lines: readonly CalcLineInput[]
   billDiscount?: DiscountSpec | null
+  /** Flat charges on top of the food; left out means none. */
+  charges?: CalcCharges | null
   config: CalcConfig
 }
 
@@ -74,6 +85,8 @@ export interface BillCalculation {
   billDiscountTotal: number
   discountedSubtotal: number
   serviceCharge: number
+  deliveryCharge: number
+  packagingCharge: number
   taxes: BillTaxLine[]
   taxTotal: number
   /** Total before rounding. */
@@ -181,6 +194,23 @@ function validate(input: CalcInput): void {
     }
   }
   const { serviceChargeBps, roundOffUnit } = input.config
+  if (input.charges) {
+    const { deliveryCharge, packagingCharge, deliveryChargeTaxBps, packagingChargeTaxBps } =
+      input.charges
+    for (const [value, what] of [
+      [deliveryCharge, 'The delivery charge'],
+      [packagingCharge, 'The packaging charge']
+    ] as const) {
+      assertWhole(value, what)
+      if (value < 0 || value > MAX_UNIT_PRICE) {
+        throw new BillCalculationError(`${what} is out of range.`)
+      }
+    }
+    for (const bps of [deliveryChargeTaxBps, packagingChargeTaxBps]) {
+      assertWhole(bps, 'A tax rate')
+      if (bps < 0 || bps > 10_000) throw new BillCalculationError('A tax rate is out of range.')
+    }
+  }
   assertWhole(serviceChargeBps, 'The service charge')
   if (serviceChargeBps < 0 || serviceChargeBps > 10_000) {
     throw new BillCalculationError('The service charge is out of range.')
@@ -238,6 +268,15 @@ export function calculateBill(input: CalcInput): BillCalculation {
     if (rate === 0) return
     slabs.set(rate, (slabs.get(rate) ?? 0) + (lines[index]?.taxableValue ?? 0))
   })
+  // The flat charges are taxed at their own rate, in the same slabs as the food.
+  const deliveryCharge = input.charges?.deliveryCharge ?? 0
+  const packagingCharge = input.charges?.packagingCharge ?? 0
+  for (const [amount, rate] of [
+    [deliveryCharge, input.charges?.deliveryChargeTaxBps ?? 0],
+    [packagingCharge, input.charges?.packagingChargeTaxBps ?? 0]
+  ] as const) {
+    if (amount > 0 && rate > 0) slabs.set(rate, (slabs.get(rate) ?? 0) + amount)
+  }
   const taxes: BillTaxLine[] = []
   for (const rate of [...slabs.keys()].sort((a, b) => a - b)) {
     const taxableAmount = slabs.get(rate) ?? 0
@@ -259,7 +298,8 @@ export function calculateBill(input: CalcInput): BillCalculation {
   const taxTotal = taxes.reduce((sum, tax) => sum + tax.taxAmount, 0)
 
   // 5. Round off and total.
-  const preRoundTotal = discountedSubtotal + serviceCharge + taxTotal
+  const preRoundTotal =
+    discountedSubtotal + serviceCharge + deliveryCharge + packagingCharge + taxTotal
   const grandTotal = roundToUnit(preRoundTotal, config.roundOffUnit)
 
   return {
@@ -269,6 +309,8 @@ export function calculateBill(input: CalcInput): BillCalculation {
     billDiscountTotal,
     discountedSubtotal,
     serviceCharge,
+    deliveryCharge,
+    packagingCharge,
     taxes,
     taxTotal,
     preRoundTotal,

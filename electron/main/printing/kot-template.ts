@@ -100,6 +100,19 @@ export function buildKotTicket(input: KotTicketInput): TicketLine[] {
   if (kot.orderType !== 'DINE_IN' && kot.customerName) {
     lines.push(labelled('Customer', kot.customerName))
   }
+  if (kot.orderType !== 'DINE_IN' && kot.customerPhone) {
+    lines.push(labelled('Phone', kot.customerPhone))
+  }
+  if (kot.orderType === 'DELIVERY' && kot.deliveryAddress) {
+    lines.push(labelled('Address', kot.deliveryAddress))
+  }
+  if (kot.orderType !== 'DINE_IN' && kot.promisedAt) {
+    const when = formatTicketTime(kot.promisedAt, input.timezone)
+    lines.push({
+      ...labelled(kot.orderType === 'DELIVERY' ? 'Due by' : 'Ready by', when),
+      bold: true
+    })
+  }
   lines.push(labelled('Time', formatTicketTime(kot.createdAt, input.timezone)))
   lines.push(labelled('Taken by', kot.createdByName))
   lines.push({ text: '', rule: true })
