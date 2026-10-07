@@ -5,8 +5,13 @@ import { ADMIN_NAV } from '@/modules/admin/navigation'
 import { RequireAuth } from '@/modules/auth/RequireAuth'
 import { AccountPage } from '@/pages/AccountPage'
 import { AuditLogsPage } from '@/pages/AuditLogsPage'
+import { BillingSettingsPage } from '@/pages/BillingSettingsPage'
+import { BillPage } from '@/pages/BillPage'
+import { BillsPage } from '@/pages/BillsPage'
+import { KotsPage } from '@/pages/KotsPage'
 import { MenuPage } from '@/pages/MenuPage'
 import { OrderPage } from '@/pages/OrderPage'
+import { PrintersPage } from '@/pages/PrintersPage'
 import { RestaurantSettingsPage } from '@/pages/RestaurantSettingsPage'
 import { RolesPage } from '@/pages/RolesPage'
 import { SetupPage } from '@/pages/SetupPage'
@@ -27,6 +32,10 @@ import { StartupPage } from '@/pages/StartupPage'
 const ADMIN_PAGES: Record<string, ReactNode> = {
   '/admin/menu': <MenuPage />,
   '/admin/tables': <TablesPage />,
+  '/admin/bills': <BillsPage />,
+  '/admin/billing-settings': <BillingSettingsPage />,
+  '/admin/kot': <KotsPage />,
+  '/admin/printers': <PrintersPage />,
   '/admin/staff': <StaffPage />,
   '/admin/roles': <RolesPage />,
   '/admin/settings': <RestaurantSettingsPage />,
@@ -86,6 +95,14 @@ const router = createHashRouter([
                 <OrderPage />
               </RequireAuth>
             )
+          },
+          {
+            path: 'bills/:billId',
+            element: (
+              <RequireAuth permission="billing.view">
+                <BillPage />
+              </RequireAuth>
+            )
           }
         ]
       },
@@ -96,7 +113,18 @@ const router = createHashRouter([
             <AdminLayout />
           </RequireAuth>
         ),
-        children: [{ index: true, element: <AdminDashboardPage /> }, ...adminRoutes]
+        children: [
+          { index: true, element: <AdminDashboardPage /> },
+          ...adminRoutes,
+          {
+            path: 'bills/:billId',
+            element: (
+              <RequireAuth permission="billing.view">
+                <BillPage />
+              </RequireAuth>
+            )
+          }
+        ]
       },
       {
         path: 'kitchen',

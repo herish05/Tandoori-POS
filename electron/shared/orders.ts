@@ -1,4 +1,6 @@
 import { z } from 'zod'
+import type { BillStatus } from './billing'
+import type { KotSummary } from './kitchen'
 import type { AddonKind, FoodType } from './menu'
 import type { TableStatus } from './tables'
 
@@ -79,8 +81,8 @@ export const CANCELLABLE_ORDER_STATUSES: readonly OrderStatus[] = [
 
 /**
  * Which status may follow which. CANCELLED is reached through the cancel action (it needs a
- * reason) and COMPLETED through billing; the kitchen steps are driven by the kitchen screen once
- * it exists, until then staff can mark an order served by hand.
+ * reason) and COMPLETED through billing. KOT_PENDING, PREPARING and READY follow the kitchen
+ * tickets and are never set by hand; staff can mark an order served and ask for the bill.
  */
 export const ORDER_TRANSITIONS: Record<OrderStatus, readonly OrderStatus[]> = {
   DRAFT: ['CONFIRMED', 'CANCELLED'],
@@ -109,12 +111,17 @@ export const TABLE_STATUS_FOR_ORDER: Record<OrderStatus, TableStatus> = {
 
 /** Statuses staff can set directly with the "set status" call. */
 export const SETTABLE_ORDER_STATUSES = [
-  'KOT_PENDING',
-  'PREPARING',
-  'READY',
   'SERVED',
   'BILL_REQUESTED'
 ] as const satisfies readonly OrderStatus[]
+
+/** Statuses that mirror the kitchen tickets of the order. */
+export const KITCHEN_ORDER_STATUSES: readonly OrderStatus[] = [
+  'CONFIRMED',
+  'KOT_PENDING',
+  'PREPARING',
+  'READY'
+]
 
 export const MAX_LINE_QUANTITY = 99
 export const MAX_LINE_ADDONS = 20
@@ -182,6 +189,14 @@ export interface OrderSummary {
   updatedAt: string
 }
 
+/** The live (not cancelled) bill of an order. */
+export interface OrderBillRef {
+  id: string
+  billNumber: string
+  status: BillStatus
+  grandTotal: number
+}
+
 export interface OrderDetail extends OrderSummary {
   deliveryAddress: string | null
   notes: string | null
@@ -191,6 +206,10 @@ export interface OrderDetail extends OrderSummary {
   lines: OrderLine[]
   /** Some lines have not been sent to the kitchen yet. */
   hasUnsentLines: boolean
+  /** The bill made for this order, if any. */
+  bill: OrderBillRef | null
+  /** The kitchen tickets issued for this order, oldest first. */
+  kots: KotSummary[]
 }
 
 export interface PosVariant {

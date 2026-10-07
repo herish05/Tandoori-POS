@@ -2,7 +2,9 @@
 
 Offline-first restaurant POS and management desktop app for **TANDOORI BITES**, Rampura Phul, Punjab.
 
-Current status: **Phase 5 – Order management** complete (Phases 1 Foundation, 2 Authentication, 3 Table and area management and 4 Menu management before it). See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the architecture and the phase plan.
+Current status: **Phase 10 – Advanced table operations** complete (Phases 1 to 6, 8 and 9 before it; the kitchen
+display phase was skipped for now). Built for Windows terminals with a touch screen and a mouse.
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the architecture and the phase plan.
 
 ## Requirements
 
@@ -97,6 +99,15 @@ Sign-in works fully offline: accounts and passwords live in the local database.
   deactivation takes effect immediately.
 - Login, logout, failed login, permission denials, staff/role/restaurant changes are audited.
 - Staff created or reset by an admin must choose their own password at first sign-in.
+
+## Kitchen tickets and printers
+
+Sending an order creates a numbered kitchen ticket (KOT) per kitchen station. Add printers under
+**Admin > Printers**: a network thermal printer (ESC/POS, `host:port`, default port 9100) or a printer
+installed on this computer. A printer can serve one station; the first printer without a station is the
+default for the rest. If no printer can be reached, the ticket opens as an on-screen preview that can be
+printed from the computer, and the failure is written to the audit log. Tickets move through
+New, Accepted, Preparing, Ready and Served on **Kitchen**; **Admin > KOT** lists all tickets.
 
 ## Where data lives
 

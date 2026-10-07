@@ -40,7 +40,7 @@ function Stepper({
       <Button
         variant="outline"
         size="icon"
-        className="size-8"
+        className="size-8 touch:size-11"
         aria-label={`Decrease ${label}`}
         disabled={disabled || quantity <= 1}
         onClick={() => {
@@ -49,11 +49,11 @@ function Stepper({
       >
         <Minus />
       </Button>
-      <span className="w-7 text-center text-sm font-bold">{quantity}</span>
+      <span className="w-7 text-center text-sm font-bold touch:w-9 touch:text-lg">{quantity}</span>
       <Button
         variant="outline"
         size="icon"
-        className="size-8"
+        className="size-8 touch:size-11"
         aria-label={`Increase ${label}`}
         disabled={disabled || quantity >= MAX_LINE_QUANTITY}
         onClick={() => {

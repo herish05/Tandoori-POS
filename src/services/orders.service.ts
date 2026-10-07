@@ -12,6 +12,7 @@ import type {
   UpdateLineInput,
   UpdateOrderInput
 } from '@shared/orders'
+import type { SendOrderResult } from '@shared/kitchen'
 import { getApi, unwrap } from '@/lib/ipc'
 
 export const orderService = {
@@ -28,7 +29,7 @@ export const orderService = {
     unwrap(getApi().orders.removeLine(input)),
   cancelLine: (input: CancelLineInput): Promise<OrderDetail> =>
     unwrap(getApi().orders.cancelLine(input)),
-  send: (id: string): Promise<OrderDetail> => unwrap(getApi().orders.send(id)),
+  send: (id: string): Promise<SendOrderResult> => unwrap(getApi().orders.send(id)),
   setStatus: (input: SetOrderStatusInput): Promise<OrderDetail> =>
     unwrap(getApi().orders.setStatus(input)),
   cancel: (input: CancelOrderInput): Promise<OrderDetail> => unwrap(getApi().orders.cancel(input))

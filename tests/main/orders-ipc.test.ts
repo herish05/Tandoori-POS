@@ -118,9 +118,14 @@ describe('order IPC', () => {
     })
     const id = created.ok ? created.data.id : ''
     expect(await invoke(IPC_CHANNELS.ordersGet, { id })).toMatchObject({ ok: true })
+    // No printer is set up, so the ticket does not print, but the order is still sent.
     expect(await invoke(IPC_CHANNELS.ordersSend, { id })).toMatchObject({
       ok: true,
-      data: { status: 'CONFIRMED' }
+      data: {
+        order: { status: 'CONFIRMED' },
+        kots: [{ kotNumber: 'TK-KOT-000001' }],
+        print: [{ status: 'FAILED' }]
+      }
     })
     expect(await invoke(IPC_CHANNELS.ordersList, { activeOnly: true })).toMatchObject({
       ok: true,
@@ -171,7 +176,7 @@ describe('order IPC', () => {
     })
     expect(created.ok).toBe(true)
     const order = (created as { ok: true; data: OrderDetail }).data
-    const sent = await invoke<OrderDetail>(IPC_CHANNELS.ordersSend, { id: order.id })
+    const sent = await invoke(IPC_CHANNELS.ordersSend, { id: order.id })
     expect(sent.ok).toBe(true)
     const lineId = order.lines[0]?.id
 

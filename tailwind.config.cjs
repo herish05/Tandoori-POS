@@ -4,6 +4,10 @@ module.exports = {
   content: ['./index.html', './src/**/*.{ts,tsx}'],
   theme: {
     extend: {
+      screens: {
+        /** The terminal has a touch screen: bigger tap targets, whatever pointer is in use. */
+        touch: { raw: '(any-pointer: coarse)' }
+      },
       fontFamily: {
         sans: ['Inter', 'system-ui', 'Segoe UI', 'Roboto', 'Helvetica Neue', 'Arial', 'sans-serif']
       },

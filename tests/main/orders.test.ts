@@ -20,6 +20,7 @@ import {
   type CreateOrderInput,
   type OrderLineInput
 } from '@shared/orders'
+import { setKotStatusInputSchema } from '@shared/kitchen'
 import { withImpliedPermissions } from '@shared/permissions'
 import { createAreaInputSchema, createTableInputSchema } from '@shared/tables'
 import type { AuthContext } from '@main/auth/types'
@@ -66,6 +67,21 @@ describe('order management', () => {
       ctx,
       setOrderStatusInputSchema.parse({ id: orderId, status: next })
     )
+  /** Moves every open ticket of the order through the kitchen up to the given step. */
+  const kitchen = (orderId: string, target: 'ACCEPTED' | 'PREPARING' | 'READY' | 'SERVED') => {
+    const steps: readonly string[] = ['ACCEPTED', 'PREPARING', 'READY', 'SERVED']
+    for (const kot of app.services.kots.list({ orderId, openOnly: true })) {
+      for (const step of steps.slice(0, steps.indexOf(target) + 1)) {
+        if (steps.indexOf(step) > steps.indexOf(kot.status)) {
+          app.services.kots.setStatus(
+            owner,
+            setKotStatusInputSchema.parse({ id: kot.id, status: step })
+          )
+        }
+      }
+    }
+    return app.services.orders.get(orderId)
+  }
   const auditActions = (): string[] =>
     app.handle.db
       .select({ action: auditLogs.action })
@@ -630,8 +646,7 @@ describe('order management', () => {
     it('sends only the new lines of an order that is being prepared and keeps its status', () => {
       const order = dineIn(tableId, [line(dal)])
       app.services.orders.send(owner, order.id)
-      status(order.id, 'KOT_PENDING')
-      status(order.id, 'PREPARING')
+      kitchen(order.id, 'PREPARING')
       app.services.orders.addItems(
         owner,
         addItemsInputSchema.parse({ orderId: order.id, lines: [line(naan)] })
@@ -644,15 +659,13 @@ describe('order management', () => {
     it('goes back to confirmed when more is ordered after ready or served', () => {
       const order = dineIn(tableId, [line(dal)])
       app.services.orders.send(owner, order.id)
-      status(order.id, 'KOT_PENDING')
-      status(order.id, 'PREPARING')
-      status(order.id, 'READY')
+      expect(kitchen(order.id, 'READY').status).toBe('READY')
       app.services.orders.addItems(
         owner,
         addItemsInputSchema.parse({ orderId: order.id, lines: [line(naan)] })
       )
       expect(app.services.orders.send(owner, order.id).status).toBe('CONFIRMED')
-      status(order.id, 'SERVED')
+      expect(kitchen(order.id, 'SERVED').status).toBe('SERVED')
       app.services.orders.addItems(
         owner,
         addItemsInputSchema.parse({ orderId: order.id, lines: [line(naan)] })
@@ -664,11 +677,22 @@ describe('order management', () => {
       const order = dineIn(tableId, [line(dal)])
       expect(await failureCode(() => status(order.id, 'SERVED'))).toBe('CONFLICT')
       app.services.orders.send(owner, order.id)
-      expect(status(order.id, 'KOT_PENDING').status).toBe('KOT_PENDING')
+      // The kitchen statuses follow the tickets; they cannot be set by hand.
+      for (const manual of ['KOT_PENDING', 'PREPARING', 'READY']) {
+        expect(setOrderStatusInputSchema.safeParse({ id: order.id, status: manual }).success).toBe(
+          false
+        )
+        expect(
+          await failureCode(() =>
+            app.services.orders.setStatus(owner, { id: order.id, status: manual } as never)
+          )
+        ).toBe('CONFLICT')
+      }
+      expect(kitchen(order.id, 'ACCEPTED').status).toBe('KOT_PENDING')
       expect(tableStatus(tableId)?.status).toBe('KOT_PENDING')
-      expect(await failureCode(() => status(order.id, 'READY'))).toBe('CONFLICT')
-      status(order.id, 'PREPARING')
-      expect(status(order.id, 'READY').status).toBe('READY')
+      kitchen(order.id, 'PREPARING')
+      expect(app.services.orders.get(order.id).status).toBe('PREPARING')
+      expect(kitchen(order.id, 'READY').status).toBe('READY')
       expect(await failureCode(() => status(order.id, 'BILL_REQUESTED'))).toBe('CONFLICT')
       expect(status(order.id, 'SERVED').status).toBe('SERVED')
       expect(status(order.id, 'BILL_REQUESTED').status).toBe('BILL_REQUESTED')

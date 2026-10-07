@@ -57,7 +57,7 @@ export function OrdersList() {
 
   const chip = (active: boolean) =>
     cn(
-      'h-9 rounded-full border px-4 text-sm font-semibold transition-colors',
+      'h-9 rounded-full border px-4 text-sm font-semibold transition-colors touch:h-11',
       active ? 'border-primary bg-primary text-primary-foreground' : 'bg-card hover:bg-accent'
     )
 

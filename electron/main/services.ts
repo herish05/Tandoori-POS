@@ -12,11 +12,19 @@ import { DemoMenuService } from './menu/demo-service'
 import { ItemService } from './menu/item-service'
 import { StationService } from './menu/station-service'
 import { TaxCategoryService } from './menu/tax-service'
+import { BillService } from './billing/bill-service'
+import { BillingSettingsService } from './billing/settings-service'
+import { KotService } from './kitchen/kot-service'
+import { NetworkPrinterDriver, type PrinterDrivers } from './printing/drivers'
+import { PrinterService } from './printing/printer-service'
+import { PrintService } from './printing/print-service'
+import { ReceiptService } from './printing/receipt-service'
 import { OrderCatalogService } from './orders/catalog-service'
 import { OrderService } from './orders/order-service'
 import { RestaurantService } from './restaurant/restaurant-service'
 import { SetupService } from './setup/setup-service'
 import { AreaService } from './tables/area-service'
+import { TableOperationService } from './tables/table-ops-service'
 import { TableService } from './tables/table-service'
 
 export interface Services {
@@ -28,6 +36,7 @@ export interface Services {
   roles: RoleService
   areas: AreaService
   tables: TableService
+  tableOps: TableOperationService
   stations: StationService
   categories: CategoryService
   taxCategories: TaxCategoryService
@@ -35,7 +44,13 @@ export interface Services {
   items: ItemService
   demoMenu: DemoMenuService
   orders: OrderService
+  kots: KotService
+  printers: PrinterService
+  print: PrintService
   orderCatalog: OrderCatalogService
+  billingSettings: BillingSettingsService
+  bills: BillService
+  receipts: ReceiptService
 }
 
 export interface ServiceDeps {
@@ -47,6 +62,8 @@ export interface ServiceDeps {
   authOptions?: Partial<AuthOptions>
   /** Whether the sample menu may be loaded. Off unless the caller (non-production builds) opts in. */
   allowDemoData?: boolean
+  /** Printer drivers by kind; the network driver is built in, the system one comes from Electron. */
+  printDrivers?: PrinterDrivers
 }
 
 /** Builds the business services over one database connection. */
@@ -70,6 +87,13 @@ export function createServices(deps: ServiceDeps): Services {
 
   const categories = new CategoryService(deps.db, audit)
   const items = new ItemService(deps.db, audit)
+  const kots = new KotService(deps.db, audit, clock)
+  const printers = new PrinterService(deps.db, audit)
+  const billingSettings = new BillingSettingsService(deps.db, audit)
+  const drivers: PrinterDrivers = { NETWORK: new NetworkPrinterDriver(), ...deps.printDrivers }
+  const print = new PrintService(deps.db, audit, clock, kots, printers, drivers, deps.logger)
+  const bills = new BillService(deps.db, audit, clock, billingSettings)
+  const orders = new OrderService(deps.db, audit, clock, kots)
 
   return {
     audit,
@@ -80,13 +104,20 @@ export function createServices(deps: ServiceDeps): Services {
     roles: new RoleService(deps.db, audit),
     areas: new AreaService(deps.db, audit),
     tables: new TableService(deps.db, audit, clock),
+    tableOps: new TableOperationService(deps.db, audit, clock, kots, orders),
     stations: new StationService(deps.db, audit),
     categories,
     taxCategories: new TaxCategoryService(deps.db, audit),
     addons: new AddonService(deps.db, audit),
     items,
     demoMenu: new DemoMenuService(deps.db, audit, deps.allowDemoData ?? false),
-    orders: new OrderService(deps.db, audit, clock),
-    orderCatalog: new OrderCatalogService(items, categories)
+    orders,
+    kots,
+    printers,
+    print,
+    orderCatalog: new OrderCatalogService(items, categories),
+    billingSettings,
+    bills,
+    receipts: new ReceiptService(deps.db, audit, bills, print, printers, deps.logger)
   }
 }

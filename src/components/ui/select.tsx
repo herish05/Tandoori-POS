@@ -6,7 +6,7 @@ const Select = React.forwardRef<HTMLSelectElement, React.ComponentProps<'select'
     <select
       ref={ref}
       className={cn(
-        'flex h-10 w-full rounded-md border border-input bg-card px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50',
+        'flex h-10 w-full rounded-md border border-input bg-card px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50 touch:h-12 touch:text-base',
         className
       )}
       {...props}

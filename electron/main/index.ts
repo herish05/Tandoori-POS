@@ -12,11 +12,14 @@ import { ensureDeviceIdentity, SettingsRepository } from './db/settings-reposito
 import { createIpcRegistrar } from './ipc/registrar'
 import { registerAuthHandlers } from './auth-handlers'
 import { registerMenuHandlers } from './menu-handlers'
+import { registerBillingHandlers } from './billing-handlers'
+import { registerKitchenHandlers } from './kitchen-handlers'
 import { registerOrderHandlers } from './order-handlers'
 import { registerTableHandlers } from './table-handlers'
 import { registerCoreHandlers } from './ipc/handlers'
 import { LogManager } from './logging/log-manager'
 import { registerAppProtocol, registerAppScheme } from './security/app-protocol'
+import { createSystemPrinterDriver } from './printing/system-printer'
 import { createServices, type Services } from './services'
 import { hardenSession, hardenWebContents } from './security/harden'
 import { isTrustedRendererUrl } from './security/trusted-origin'
@@ -133,7 +136,10 @@ function bootstrap(): void {
       deviceId: ctx.deviceId,
       logger: appLog,
       securityLogger: securityLog,
-      allowDemoData: env.appEnv !== 'production'
+      allowDemoData: env.appEnv !== 'production',
+      printDrivers: {
+        SYSTEM: createSystemPrinterDriver({ getWebContents: () => mainWindow?.webContents ?? null })
+      }
     })
   }
   const authService = services?.auth
@@ -154,6 +160,8 @@ function bootstrap(): void {
     registerTableHandlers(registrar, services)
     registerMenuHandlers(registrar, services)
     registerOrderHandlers(registrar, services)
+    registerKitchenHandlers(registrar, services)
+    registerBillingHandlers(registrar, services)
   }
 
   mainWindow = createMainWindow(ctx, { devServerUrl })

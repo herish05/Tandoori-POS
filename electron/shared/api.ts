@@ -44,6 +44,44 @@ import type {
   UpdateTaxCategoryInput
 } from './menu'
 import type {
+  CancelKotInput,
+  CreatePrinterInput,
+  KotBoardInput,
+  KotDetail,
+  KotFilterInput,
+  KotPreview,
+  KotPreviewInput,
+  KotPrintOutcome,
+  KotSummary,
+  PrinterConfig,
+  PrinterTestOutcome,
+  SendOrderResult,
+  SetKotStatusInput,
+  UpdatePrinterInput
+} from './kitchen'
+import type {
+  ApplyDiscountInput,
+  BillDetail,
+  BillFilterInput,
+  BillSummary,
+  BillingSettings,
+  CancelBillInput,
+  GenerateBillInput,
+  PayBillInput,
+  PayBillResult,
+  RefundBillInput,
+  RefundBillResult,
+  RemoveDiscountInput,
+  UpdateBillingSettingsInput
+} from './billing'
+import type {
+  PrintReceiptInput,
+  ReceiptPreview,
+  ReceiptPreviewInput,
+  ReceiptPrintOutcome,
+  ReceiptPrintRecord
+} from './receipts'
+import type {
   AddItemsInput,
   CancelLineInput,
   CancelOrderInput,
@@ -57,6 +95,7 @@ import type {
   UpdateLineInput,
   UpdateOrderInput
 } from './orders'
+import type { MergeTablesInput, ShiftTableInput } from './table-ops'
 import type {
   AreaSummary,
   CreateAreaInput,
@@ -156,6 +195,8 @@ export interface TandooriApi {
     close: (id: string) => Promise<IpcResult<DiningTable>>
     block: (id: string) => Promise<IpcResult<DiningTable>>
     unblock: (id: string) => Promise<IpcResult<DiningTable>>
+    shift: (input: ShiftTableInput) => Promise<IpcResult<OrderDetail>>
+    merge: (input: MergeTablesInput) => Promise<IpcResult<OrderDetail>>
   }
   menu: {
     stations: {
@@ -210,8 +251,44 @@ export interface TandooriApi {
     updateLine: (input: UpdateLineInput) => Promise<IpcResult<OrderDetail>>
     removeLine: (input: RemoveLineInput) => Promise<IpcResult<OrderDetail>>
     cancelLine: (input: CancelLineInput) => Promise<IpcResult<OrderDetail>>
-    send: (id: string) => Promise<IpcResult<OrderDetail>>
+    send: (id: string) => Promise<IpcResult<SendOrderResult>>
     setStatus: (input: SetOrderStatusInput) => Promise<IpcResult<OrderDetail>>
     cancel: (input: CancelOrderInput) => Promise<IpcResult<OrderDetail>>
+  }
+  kots: {
+    list: (filter: KotFilterInput) => Promise<IpcResult<KotSummary[]>>
+    get: (id: string) => Promise<IpcResult<KotDetail>>
+    board: (input: KotBoardInput) => Promise<IpcResult<KotDetail[]>>
+    setStatus: (input: SetKotStatusInput) => Promise<IpcResult<KotDetail>>
+    cancel: (input: CancelKotInput) => Promise<IpcResult<KotDetail>>
+    preview: (input: KotPreviewInput) => Promise<IpcResult<KotPreview>>
+    print: (id: string) => Promise<IpcResult<KotPrintOutcome>>
+  }
+  billing: {
+    settings: () => Promise<IpcResult<BillingSettings>>
+    updateSettings: (input: UpdateBillingSettingsInput) => Promise<IpcResult<BillingSettings>>
+  }
+  bills: {
+    list: (filter: BillFilterInput) => Promise<IpcResult<BillSummary[]>>
+    get: (id: string) => Promise<IpcResult<BillDetail>>
+    generate: (input: GenerateBillInput) => Promise<IpcResult<BillDetail>>
+    applyDiscount: (input: ApplyDiscountInput) => Promise<IpcResult<BillDetail>>
+    removeDiscount: (input: RemoveDiscountInput) => Promise<IpcResult<BillDetail>>
+    cancel: (input: CancelBillInput) => Promise<IpcResult<BillDetail>>
+    pay: (input: PayBillInput) => Promise<IpcResult<PayBillResult>>
+    refund: (input: RefundBillInput) => Promise<IpcResult<RefundBillResult>>
+  }
+  receipts: {
+    preview: (input: ReceiptPreviewInput) => Promise<IpcResult<ReceiptPreview>>
+    print: (input: PrintReceiptInput) => Promise<IpcResult<ReceiptPrintOutcome>>
+    history: (billId: string) => Promise<IpcResult<ReceiptPrintRecord[]>>
+  }
+  printers: {
+    list: () => Promise<IpcResult<PrinterConfig[]>>
+    create: (input: CreatePrinterInput) => Promise<IpcResult<PrinterConfig>>
+    update: (input: UpdatePrinterInput) => Promise<IpcResult<PrinterConfig>>
+    delete: (id: string) => Promise<IpcResult<null>>
+    test: (id: string) => Promise<IpcResult<PrinterTestOutcome>>
+    systemDevices: () => Promise<IpcResult<string[]>>
   }
 }

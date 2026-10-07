@@ -36,6 +36,34 @@
       "when": 1791258868484,
       "tag": "0004_order_management",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1791267197701,
+      "tag": "0005_kot_and_printing",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1791270328978,
+      "tag": "0006_billing_and_payments",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1791284740127,
+      "tag": "0007_receipts_and_refunds",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1791347244016,
+      "tag": "0008_table_operations",
+      "breakpoints": true
     }
   ]
 }

@@ -2,8 +2,8 @@ import { and, eq, sql } from 'drizzle-orm'
 import type { DbExecutor } from '../db/client'
 import { documentSequences, restaurants } from '../db/schema'
 
-/** Document kinds numbered by the sequence table. Later phases add their own (KOT, BILL...). */
-export type DocumentKind = 'ORD'
+/** Document kinds numbered by the sequence table.  */
+export type DocumentKind = 'ORD' | 'KOT' | 'BILL' | 'REF'
 
 const FALLBACK_PREFIX = 'POS'
 const MAX_PREFIX_LENGTH = 4

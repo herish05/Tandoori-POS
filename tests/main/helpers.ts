@@ -7,6 +7,7 @@ import type { AuthOptions } from '@main/auth/auth-service'
 import { openDatabase, type DatabaseHandle } from '@main/db/client'
 import { runMigrations } from '@main/db/migrate'
 import type { Logger } from '@main/logging/log-manager'
+import type { PrinterDrivers } from '@main/printing/drivers'
 import { createServices, type Services } from '@main/services'
 
 export const MIGRATIONS = resolve(__dirname, '../../drizzle')
@@ -51,7 +52,10 @@ export interface TestApp {
   cleanup: () => void
 }
 
-export function createTestApp(authOptions?: Partial<AuthOptions>): TestApp {
+export function createTestApp(
+  authOptions?: Partial<AuthOptions>,
+  printDrivers?: PrinterDrivers
+): TestApp {
   const dir = mkdtempSync(join(tmpdir(), 'tpos-auth-'))
   const handle = openDatabase(join(dir, 'test.db'))
   runMigrations(handle.db, handle.sqlite, MIGRATIONS)
@@ -70,7 +74,8 @@ export function createTestApp(authOptions?: Partial<AuthOptions>): TestApp {
       securityLogger: silentLogger,
       allowDemoData: true,
       clock: () => clock.now,
-      ...(authOptions ? { authOptions } : {})
+      ...(authOptions ? { authOptions } : {}),
+      ...(printDrivers ? { printDrivers } : {})
     })
 
   return {

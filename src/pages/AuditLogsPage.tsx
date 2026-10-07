@@ -21,6 +21,9 @@ const AREAS = [
   { value: 'table.', label: 'Tables' },
   { value: 'menu.', label: 'Menu' },
   { value: 'order.', label: 'Orders' },
+  { value: 'kot.', label: 'Kitchen tickets' },
+  { value: 'bill', label: 'Bills and payments' },
+  { value: 'printer.', label: 'Printers' },
   { value: 'restaurant.', label: 'Restaurant settings' },
   { value: 'setup.', label: 'Setup' }
 ] as const

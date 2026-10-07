@@ -36,6 +36,9 @@ export function createMainWindow(ctx: AppContext, options: WindowOptions): Brows
     }
   })
 
+  // A touch screen must not let a two-finger pinch zoom the whole POS.
+  void win.webContents.setVisualZoomLevelLimits(1, 1)
+
   win.once('ready-to-show', () => {
     if (config.startMaximized) win.maximize()
     if (config.posFullscreen) win.setFullScreen(true)

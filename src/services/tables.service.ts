@@ -1,3 +1,5 @@
+import type { OrderDetail } from '@shared/orders'
+import type { MergeTablesInput, ShiftTableInput } from '@shared/table-ops'
 import type {
   AreaSummary,
   CreateAreaInput,
@@ -33,5 +35,7 @@ export const tableService = {
   open: (input: OpenTableInput): Promise<DiningTable> => unwrap(getApi().tables.open(input)),
   close: (id: string): Promise<DiningTable> => unwrap(getApi().tables.close(id)),
   block: (id: string): Promise<DiningTable> => unwrap(getApi().tables.block(id)),
-  unblock: (id: string): Promise<DiningTable> => unwrap(getApi().tables.unblock(id))
+  unblock: (id: string): Promise<DiningTable> => unwrap(getApi().tables.unblock(id)),
+  shift: (input: ShiftTableInput): Promise<OrderDetail> => unwrap(getApi().tables.shift(input)),
+  merge: (input: MergeTablesInput): Promise<OrderDetail> => unwrap(getApi().tables.merge(input))
 }

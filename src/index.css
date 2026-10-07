@@ -80,4 +80,62 @@
   :focus-visible {
     @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
   }
+
+  /* Touch: no double-tap zoom or tap delay, no grey flash, no rubber-banding. */
+  html {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    overscroll-behavior: none;
+  }
+
+  img,
+  a {
+    -webkit-user-drag: none;
+  }
+
+  /* A finger needs a bigger target than a mouse pointer: tick boxes and the rows that hold them. */
+  @media (any-pointer: coarse) {
+    input[type='checkbox'],
+    input[type='radio'] {
+      width: 1.5rem;
+      height: 1.5rem;
+    }
+
+    label:has(> input[type='checkbox']),
+    label:has(> input[type='radio']) {
+      min-height: 2.75rem;
+      gap: 0.75rem;
+    }
+
+    ::-webkit-scrollbar {
+      width: 14px;
+      height: 14px;
+    }
+  }
+}
+
+/* Printing a ticket from this computer: only the ticket sheet is printed, never the app. */
+#print-sheet {
+  display: none;
+}
+
+@media print {
+  #root {
+    display: none !important;
+  }
+
+  #print-sheet {
+    display: block !important;
+    overflow: visible;
+    background: #fff;
+    color: #000;
+    font-family: 'DejaVu Sans Mono', 'Courier New', monospace;
+    font-size: 11pt;
+    line-height: 1.25;
+    white-space: pre;
+  }
+
+  body {
+    overflow: visible;
+  }
 }

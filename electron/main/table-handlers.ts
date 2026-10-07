@@ -10,12 +10,13 @@ import {
   updateAreaInputSchema,
   updateTableInputSchema
 } from '@shared/tables'
+import { mergeTablesInputSchema, shiftTableInputSchema } from '@shared/table-ops'
 import type { IpcRegistrar } from './ipc/registrar'
 import type { Services } from './services'
 
 /** Areas, tables, floor plan and table open/close handlers. */
 export function registerTableHandlers(registrar: IpcRegistrar, services: Services): void {
-  const { areas, tables } = services
+  const { areas, tables, tableOps } = services
 
   // --- Read: admin lists and the POS floor ------------------------------------------------
   registrar.handleProtected(
@@ -116,5 +117,19 @@ export function registerTableHandlers(registrar: IpcRegistrar, services: Service
     idInputSchema,
     { permissions: ['tables.operate'] },
     (input, ctx) => tables.unblock(ctx, input.id)
+  )
+
+  // --- Service: shift a party, merge two tables --------------------------------------------
+  registrar.handleProtected(
+    IPC_CHANNELS.tablesShift,
+    shiftTableInputSchema,
+    { permissions: ['tables.transfer'] },
+    (input, ctx) => tableOps.shift(ctx, input)
+  )
+  registrar.handleProtected(
+    IPC_CHANNELS.tablesMerge,
+    mergeTablesInputSchema,
+    { permissions: ['tables.transfer'] },
+    (input, ctx) => tableOps.merge(ctx, input)
   )
 }

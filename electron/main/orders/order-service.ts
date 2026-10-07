@@ -16,18 +16,20 @@ import {
   orderItems,
   orders,
   taxCategories,
-  users
+  users,
+  bills
 } from '../db/schema'
+import type { KotService } from '../kitchen/kot-service'
 import { AppError } from '../ipc/errors'
 import { requireRestaurantId } from '../restaurant/restaurant-service'
 import {
   CANCELLABLE_ORDER_STATUSES,
   CLOSED_ORDER_STATUSES,
   EDITABLE_ORDER_STATUSES,
+  KITCHEN_ORDER_STATUSES,
   MAX_ORDER_LINES,
   ORDER_STATUS_LABELS,
   ORDER_TRANSITIONS,
-  TABLE_STATUS_FOR_ORDER,
   computeLineTotal,
   type AddItemsData,
   type CancelLineData,
@@ -42,9 +44,11 @@ import {
   type RemoveLineData,
   type SetOrderStatusData,
   type UpdateLineData,
-  type UpdateOrderData
+  type UpdateOrderData,
+  type OrderBillRef
 } from '@shared/orders'
 import { nextDocumentNumber } from './numbering'
+import { moveOrderStatus, refreshOrderSubtotal } from './order-state'
 
 type OrderRow = typeof orders.$inferSelect
 type LineRow = typeof orderItems.$inferSelect
@@ -63,7 +67,8 @@ export class OrderService {
   constructor(
     private readonly db: AppDatabase,
     private readonly audit: AuditService,
-    private readonly clock: Clock
+    private readonly clock: Clock,
+    private readonly kots: KotService
   ) {}
 
   // --- Reads -------------------------------------------------------------------------------
@@ -294,6 +299,7 @@ export class OrderService {
         .where(eq(orderItems.id, line.id))
         .run()
       this.refreshSubtotal(tx, order.id)
+      this.kots.onLineCancelled(tx, auth, order, line.id, input.reason)
       this.record(tx, auth, 'order.item_cancelled', order, {
         item: line.itemName,
         quantity: line.quantity,
@@ -304,12 +310,18 @@ export class OrderService {
   }
 
   /**
-   * Sends everything not yet sent to the kitchen. A draft becomes CONFIRMED. On an order that
-   * is further along, new items put it back to CONFIRMED when everything before was already
-   * ready or served (there is new work again); otherwise its status stays.
+   * Sends everything not yet sent to the kitchen and issues the kitchen tickets for it: one per
+   * station, each marked additional when the order already had a ticket. The order follows its
+   * tickets: a draft becomes CONFIRMED, and new items on an order that was ready or served put
+   * it back to CONFIRMED (there is new work again).
    */
   send(auth: AuthContext, id: string): OrderDetail {
-    this.db.transaction((tx) => {
+    return this.sendAndGetKots(auth, id).order
+  }
+
+  /** Like `send`, and also says which tickets were issued so they can be printed. */
+  sendAndGetKots(auth: AuthContext, id: string): { order: OrderDetail; kotIds: string[] } {
+    const kotIds = this.db.transaction((tx) => {
       const order = this.requireOrder(tx, id)
       this.assertEditable(order)
       const pending = this.lines(tx, order.id).filter((line) => line.status === 'NEW')
@@ -328,12 +340,14 @@ export class OrderService {
         )
         .run()
 
-      const next: OrderStatus =
-        order.status === 'DRAFT' || order.status === 'READY' || order.status === 'SERVED'
-          ? 'CONFIRMED'
-          : order.status
-      if (next !== order.status) {
-        this.moveOrder(tx, order, next, { confirmedAt: order.confirmedAt ?? now })
+      const issued = this.kots.issue(tx, auth, order, pending)
+      this.kots.syncOrderStatus(tx, order.id)
+      const after = this.requireOrder(tx, order.id)
+      if (!after.confirmedAt) {
+        tx.update(orders)
+          .set({ confirmedAt: now, ...markModified(orders) })
+          .where(eq(orders.id, order.id))
+          .run()
       } else {
         this.touch(tx, order.id)
       }
@@ -341,16 +355,24 @@ export class OrderService {
         lines: pending.length,
         quantity: pending.reduce((sum, line) => sum + line.quantity, 0),
         statusFrom: order.status,
-        statusTo: next
+        statusTo: after.status,
+        kots: issued.map((kot) => kot.kotNumber)
       })
+      return issued.map((kot) => kot.id)
     })
-    return this.get(id)
+    return { order: this.get(id), kotIds }
   }
 
   /** Moves an order along its life: kitchen steps, served, bill requested. */
   setStatus(auth: AuthContext, input: SetOrderStatusData): OrderDetail {
     this.db.transaction((tx) => {
       const order = this.requireOrder(tx, input.id)
+      if (KITCHEN_ORDER_STATUSES.includes(input.status)) {
+        throw new AppError(
+          'CONFLICT',
+          'The kitchen tickets set this status. Accept, start or finish the ticket instead.'
+        )
+      }
       const allowed = ORDER_TRANSITIONS[order.status]
       if (!allowed.includes(input.status)) {
         throw new AppError(
@@ -358,18 +380,23 @@ export class OrderService {
           `An order that is "${ORDER_STATUS_LABELS[order.status]}" cannot be marked "${ORDER_STATUS_LABELS[input.status]}".`
         )
       }
-      if (input.status === 'SERVED' || input.status === 'BILL_REQUESTED') {
-        const lines = this.lines(tx, order.id)
-        if (lines.some((line) => line.status === 'NEW')) {
-          throw new AppError('CONFLICT', 'Send the new items to the kitchen first.')
-        }
-        if (
-          input.status === 'BILL_REQUESTED' &&
-          !lines.some((line) => line.status !== 'CANCELLED')
-        ) {
-          throw new AppError('CONFLICT', 'There is nothing to bill on this order.')
+      if (order.status === 'BILL_REQUESTED') {
+        const live = this.liveBill(tx, order.id)
+        if (live) {
+          throw new AppError(
+            'CONFLICT',
+            `Bill ${live.billNumber} was made for this order. Cancel the bill to change the order.`
+          )
         }
       }
+      const lines = this.lines(tx, order.id)
+      if (lines.some((line) => line.status === 'NEW')) {
+        throw new AppError('CONFLICT', 'Send the new items to the kitchen first.')
+      }
+      if (input.status === 'BILL_REQUESTED' && !lines.some((line) => line.status !== 'CANCELLED')) {
+        throw new AppError('CONFLICT', 'There is nothing to bill on this order.')
+      }
+      if (input.status === 'SERVED') this.kots.onOrderServed(tx, order.id)
       this.moveOrder(tx, order, input.status)
       this.record(tx, auth, 'order.status_changed', order, {
         statusFrom: order.status,
@@ -398,6 +425,7 @@ export class OrderService {
           throw new AppError('VALIDATION_ERROR', 'Say why the order is being cancelled.')
         }
       }
+      this.kots.onOrderCancelled(tx, auth, order, input.reason)
       this.moveOrder(tx, order, 'CANCELLED', {
         cancelReason: input.reason,
         cancelledAt: new Date(this.clock()),
@@ -504,25 +532,7 @@ export class OrderService {
     status: OrderStatus,
     extra: Partial<typeof orders.$inferInsert> = {}
   ): void {
-    const result = tx
-      .update(orders)
-      .set({ ...extra, status, ...markModified(orders) })
-      .where(and(eq(orders.id, order.id), eq(orders.status, order.status)))
-      .run()
-    if (result.changes !== 1) {
-      throw new AppError('CONFLICT', 'This order was just changed somewhere else. Reopen it.')
-    }
-    if (!order.tableId) return
-
-    const target = TABLE_STATUS_FOR_ORDER[status]
-    tx.update(diningTables)
-      .set({
-        status: target,
-        ...(target === 'AVAILABLE' ? { openedAt: null, openedBy: null, guestCount: null } : {}),
-        ...markModified(diningTables)
-      })
-      .where(eq(diningTables.id, order.tableId))
-      .run()
+    moveOrderStatus(tx, order, status, extra)
   }
 
   // --- Lines -------------------------------------------------------------------------------
@@ -667,23 +677,7 @@ export class OrderService {
 
   /** Re-adds the live lines into the order's subtotal and bumps its version. */
   private refreshSubtotal(tx: DbExecutor, orderId: string): number {
-    const sum = tx
-      .select({ total: sql<number>`coalesce(sum(${orderItems.lineTotal}), 0)` })
-      .from(orderItems)
-      .where(
-        and(
-          eq(orderItems.orderId, orderId),
-          isNull(orderItems.deletedAt),
-          ne(orderItems.status, 'CANCELLED')
-        )
-      )
-      .get()
-    const subtotal = sum?.total ?? 0
-    tx.update(orders)
-      .set({ subtotal, ...markModified(orders) })
-      .where(eq(orders.id, orderId))
-      .run()
-    return subtotal
+    return refreshOrderSubtotal(tx, orderId)
   }
 
   private touch(tx: DbExecutor, orderId: string): void {
@@ -842,6 +836,25 @@ export class OrderService {
     }))
   }
 
+  /** The order's bill, unless it was cancelled. */
+  private liveBill(db: DbExecutor, orderId: string): OrderBillRef | null {
+    const row = db
+      .select()
+      .from(bills)
+      .where(
+        and(eq(bills.orderId, orderId), ne(bills.status, 'CANCELLED'), isNull(bills.deletedAt))
+      )
+      .get()
+    return row
+      ? {
+          id: row.id,
+          billNumber: row.billNumber,
+          status: row.status,
+          grandTotal: row.grandTotal
+        }
+      : null
+  }
+
   private loadDetail(db: DbExecutor, id: string): OrderDetail {
     const summary = this.loadSummaries(db, [eq(orders.id, id)], 1)[0]
     const order = db
@@ -911,7 +924,9 @@ export class OrderService {
       cancelledAt: order.cancelledAt ? order.cancelledAt.toISOString() : null,
       confirmedAt: order.confirmedAt ? order.confirmedAt.toISOString() : null,
       lines,
-      hasUnsentLines: lines.some((line) => line.status === 'NEW')
+      hasUnsentLines: lines.some((line) => line.status === 'NEW'),
+      kots: this.kots.forOrder(db, id),
+      bill: this.liveBill(db, id)
     }
   }
 }

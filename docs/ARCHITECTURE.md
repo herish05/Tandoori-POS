@@ -137,6 +137,126 @@ Every handler is registered through `createIpcRegistrar`, which:
 - Not here yet: KOT creation and printing, tax, discounts and payment (Phase 7), merging, splitting and
   moving orders.
 
+## Kitchen tickets and printing (Phase 6)
+
+- Tables (migration `0005_kot_and_printing.sql`): `kots`, `kot_items`, `printers`, `print_jobs`. Nothing is
+  seeded. Ticket lines are snapshots of the order line (name, variant, quantity, add-ons, instructions).
+- Sending an order creates one KOT per kitchen station in the same transaction as the order change. Numbers
+  look like `TB-KOT-000001` and come from `document_sequences`. Items added after the first send get an
+  additional KOT (`is_additional`); the first ticket is never rewritten.
+- Statuses: `NEW`, `ACCEPTED`, `PREPARING`, `READY`, `SERVED`, `CANCELLED`. Allowed moves are in
+  `KOT_TRANSITIONS`; each change is guarded by the status the caller last saw. The order status follows its
+  tickets (for example `PREPARING` while any ticket is preparing).
+- Immutability: SQL triggers refuse changes to a ticket's identity, numbering and lines after creation. The
+  only controlled changes are status moves, print bookkeeping, and cancelling (a ticket, or one item on it,
+  with a reason). Cancelling an item on a printed ticket flags it for reprint (`printed_revision`).
+- Printers: one printer per station plus at most one shared default (partial unique indexes). The first shared
+  printer becomes the default automatically. Kinds: `NETWORK` (ESC/POS over TCP, default port 9100) and
+  `SYSTEM` (Electron print API, Electron-only). Drivers sit behind a small interface and are injectable in tests.
+- Printing flow: `PrintService` renders the ticket text (`kot-template.ts`, 58 or 80 mm), picks the station
+  printer, falls back to the default, and records every attempt in `print_jobs`. If no printer is set up or
+  the printer cannot be reached, the ticket stays `print_status = FAILED`, an audit entry `kot.print_failed`
+  is written, and the UI opens a printable preview (with "Print from this computer") and a Reprint action.
+  Nothing fails silently, and driver internals never reach the message shown to staff.
+- Permissions: `kitchen.access` (see the board), `kitchen.operate` (move and cancel tickets, implies access),
+  `printers.view`, `printers.manage`.
+- IPC: `kots:list|get|board|set-status|cancel|preview|print`,
+  `printers:list|create|update|delete|test|system-devices`. `orders:send` now returns the created tickets
+  and their print outcome.
+- Audit actions: `kot.created|status_changed|cancelled|item_cancelled|printed|reprinted|print_failed`,
+  `printer.created|updated|deleted|test_failed`.
+- Renderer: `/kitchen` is the board (columns New, Accepted, Preparing, Ready; station filter; refreshes by
+  polling), `/admin/kot` lists and previews tickets, `/admin/printers` manages printers and prints a test
+  page, and the order screen lists its tickets.
+- Not here yet: live push to kitchen screens (Socket.IO, next phase); the OS printer driver and real thermal
+  printers are not exercised by automated tests.
+
+## Billing (Phase 8)
+
+- Tables (migration `0006_billing_and_payments.sql`): `billing_settings`, `bills`, `bill_items`, `bill_taxes`,
+  `bill_discounts`, `payments`. Nothing is seeded. Numbers look like `TB-BILL-000001` and come from
+  `document_sequences`. A bill is a frozen snapshot of the order: lines, tax rates, discounts, settings
+  and every figure, so later menu or setting changes never rewrite it. 17 SQL triggers lock the amounts,
+  the identity and the payments of a bill after creation.
+- Money is whole paise (100 paise = 1 rupee) everywhere; percentages are basis points (1% = 100). There is
+  no floating point in any money calculation. The renderer never sends a total: the main process works
+  out every figure from the order, the discounts and the billing settings.
+- `electron/main/billing/calculator.ts` is a pure function (no database, no UI): item subtotal, item
+  discounts, bill discount, service charge, GST, round-off, grand total. A bill discount and the service
+  charge are shared across lines by largest remainder (BigInt) so the parts always add up to the whole.
+  Prices are tax-exclusive. Within the state CGST = SGST = half the rate; between states the whole rate is
+  IGST. The service charge is worked out on the discounted subtotal, can be limited to dine-in, and can be
+  taxable. The total is rounded (half up) to 1, 10, 50 or 100 paise.
+- Discounts: percentage or fixed, one per item and one per bill, each with a reason (3 to 200 characters),
+  only while the bill is unpaid. Removal is a soft delete so the history stays.
+- Payments: CASH, UPI, CARD or OTHER, split across up to 10 lines. Only cash may be handed over for more
+  than the amount (change is worked out); OTHER needs a reference; payments can never exceed the balance.
+  Paying in full completes the order and moves the table to `PAID`. An empty list settles a zero-total bill.
+- Statuses: `PENDING`, `PARTIAL`, `PAID`, `REFUNDED` (Phase 9), `CANCELLED`. A bill is made
+  from a `SERVED` or `BILL_REQUESTED` order with no unsent items; generating it sets the order to
+  `BILL_REQUESTED`, cancelling it (with a reason, only while unpaid) returns the order to `SERVED`. An order
+  cannot be reopened while it has a live bill.
+- Permissions: `billing.view`, `billing.operate` (generate, cancel, take payment), `billing.discount`
+  (implies operate and view), `billing.manage` (change the billing settings).
+- IPC: `billing:settings|update-settings`, `bills:list|get|generate|apply-discount|remove-discount|cancel|pay`.
+- Audit actions: `bill.generated|discount_applied|discount_removed|payment_recorded|paid|cancelled`,
+  `billing.settings_updated`.
+- Renderer: the order screen has "Generate bill" and a link to its bill; `/pos/bills/:id` and
+  `/admin/bills/:id` show one bill with discount, payment and cancel actions; `/admin/bills` lists bills;
+  `/admin/billing-settings` sets GST mode, service charge and round-off.
+- Not here yet: a payment ledger and cash drawer (later phases). Receipts and refunds are below.
+
+## Receipts and refunds (Phase 9)
+
+- Receipts: `receipt-template.ts` lays the bill out for 58 mm or 80 mm paper (BILL, BILL - PART PAID, RECEIPT,
+  RECEIPT - REFUNDED, CANCELLED BILL; TAX INVOICE when a GSTIN is set). The footer is the restaurant's
+  receipt footer. `ReceiptService` previews, prints and lists the print history; each print is a
+  `print_jobs` row with a `snapshot` of the bill state. A repeat print of the same state is marked
+  `DUPLICATE COPY n` and the number is stored in `print_jobs.revision`.
+- Refunds: `refunds` and `refund_lines` (immutable, never deleted) give money back only through the methods
+  originally used, never above what each took. A fully returned paid bill becomes `REFUNDED`; a part-paid
+  bill must be returned in full and becomes `CANCELLED` (its order goes back to `SERVED`). `bills.refunded_total`
+  is guarded by triggers, and the status trigger blocks illegal moves (for example `REFUNDED` to anything).
+- Permissions: `billing.refund`; `billing.operate` is needed to print. IPC: `bills:refund`,
+  `receipts:preview|print|history`. Audit: `bill.refunded`, `bill.receipt_printed|receipt_reprinted|receipt_print_failed`.
+- Setting: `billing_settings.auto_print_receipt` prints the receipt right after a payment completes.
+- Renderer: bill page has Receipt / Print bill, Refund, refund list, print history; the receipt dialog can also
+  print from this computer when no printer is reachable.
+
+## Table operations (Phase 10)
+
+- Shift: moves a running dine-in order to a free (available or reserved) table, up to and including
+  `BILL_REQUESTED`. The old table is freed, the new one occupied with the same open time; a live bill and
+  its tickets follow the order because the table name on a kitchen ticket is read from the order.
+- Merge: moves every line and kitchen ticket of the source order onto the target order and cancels the
+  source with the reason "Merged into <order number>". Refused when either order has a live bill or
+  has asked for the bill. Lines keep their kitchen state; totals are recalculated on the target.
+- Every operation writes an immutable `table_operations` row (SHIFT or MERGE, from/to table and order,
+  user, time). A trigger only lets a kitchen ticket change its order when a MERGE row for exactly
+  that source and target exists.
+- Migration `0008_table_operations`. Permission `tables.transfer` (implies `tables.view`, `orders.view`).
+  IPC: `tables:shift`, `tables:merge`. Audit: `order.table_shifted`, `order.tables_merged`.
+- Renderer: the order screen of a dine-in order has a Shift / merge button (`TableTransferDialog`):
+  free tables for a shift; running tables for a merge, with the choice of which table is kept. Merge is
+  disabled while unsaved items are on screen.
+- Not here yet: splitting or moving single sent items between orders, one party across joined tables,
+  and a history screen for operations (they are in the audit log).
+
+## Touch screen and mouse
+
+The product is delivered on Windows terminals with a touch screen and a mouse, so every screen works with
+both.
+
+- Tailwind has a `touch` variant (`any-pointer: coarse`). On a terminal with a touch screen, buttons,
+  inputs, selects, quantity steppers, filter pills and tick boxes grow to finger size (44 to 56 px high)
+  whichever pointer is in use; on a mouse-only machine they stay compact.
+- No interaction depends on hover. Text selection, double-tap zoom, the tap delay and pull-to-scroll bounce
+  are switched off in the global CSS, and the window refuses pinch zoom.
+- Amount fields in the payment and discount dialogs use an on-screen number pad (`NumPad`, `applyPadKey`)
+  and `inputMode="none"`, so the Windows touch keyboard does not cover the dialog; a physical keyboard still
+  types into them. The payment dialog also offers "Exact amount" and quick cash notes for change.
+- Other text fields use the system touch keyboard, which Windows shows when a text field is tapped.
+
 ## Logging
 
 Channels `app`, `security`, `sync`, `printer`, `database` -> JSON lines, daily files, redaction of sensitive keys, 30-day retention. Renderer logs go through IPC with a flood limit.
@@ -150,8 +270,10 @@ Channels `app`, `security`, `sync`, `printer`, `database` -> JSON lines, daily f
 | 3   | Areas and tables (done)                                                                                                                                            | Table CRUD, table view with live status                    |
 | 4   | Menu management (done)                                                                                                                                             | Categories, items, variants, add-ons, taxes                |
 | 5   | Ordering (done)                                                                                                                                                    | Dine-in / takeaway / delivery orders, cart, hold           |
-| 6   | KOT and kitchen                                                                                                                                                    | KOT generation, KDS flow                                   |
-| 7   | Billing and payments                                                                                                                                               | Bills, discounts, split, payment modes, settlement         |
+| 6   | KOT and printing (done)                                                                                                                                            | Per-station KOTs, printer abstraction, preview fallback    |
+| 8   | Billing and payments (done)                                                                                                                                        | Bills, discounts, split, payment modes, settlement         |
+| 9   | Payment and receipt (done)                                                                                                                                         | 58/80 mm receipts, reprint audit, refunds                  |
+| 10  | Advanced table operations (done)                                                                                                                                   | Shift table, merge tables, operation records               |
 | 8+  | Printing, inventory, purchases, customers, reservations, reports, shifts/cash drawer, LAN sync, cloud backend and sync, backup/restore, installers and auto-update | Per the product spec                                       |
 
 Each phase ships working, tested software with a written report; no phase starts until the previous one passes tests.

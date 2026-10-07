@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   ArrowLeft,
+  ArrowRightLeft,
   BellRing,
   CheckCheck,
   ChefHat,
@@ -28,10 +29,13 @@ import {
   type OrderType,
   type PosItem
 } from '@shared/orders'
+import type { SendOrderResult } from '@shared/kitchen'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Dialog } from '@/components/ui/dialog'
 import { Skeleton } from '@/components/ui/skeleton'
+import { KotPreviewDialog } from '@/modules/kitchen/KotPreviewDialog'
+import { OrderTickets } from '@/modules/kitchen/OrderTickets'
 import { fieldErrors } from '@/lib/form'
 import { toUserMessage } from '@/lib/ipc'
 import { formatMoney } from '@/lib/money'
@@ -57,6 +61,8 @@ import { OrderDetailsForm } from '@/modules/orders/OrderDetailsForm'
 import { OrderPanel } from '@/modules/orders/OrderPanel'
 import { ReasonDialog } from '@/modules/orders/ReasonDialog'
 import { TABLE_KEYS } from '@/modules/tables/hooks'
+import { TableTransferDialog } from '@/modules/tables/TableTransferDialog'
+import { billService } from '@/services/billing.service'
 import { orderService } from '@/services/orders.service'
 import { tableService } from '@/services/tables.service'
 import { usePermission } from '@/stores/auth.store'
@@ -65,6 +71,13 @@ import { usePermission } from '@/stores/auth.store'
 interface Outcome {
   order: OrderDetail
   notice?: string
+  /** A ticket that could not be printed: shown on screen so it can still be printed by hand. */
+  preview?: PreviewRequest
+}
+
+interface PreviewRequest {
+  kotId: string
+  reason: string | null
 }
 
 type Work = () => Promise<Outcome>
@@ -81,6 +94,35 @@ const KITCHEN_STATUSES: readonly OrderStatus[] = ['CONFIRMED', 'KOT_PENDING', 'P
 
 const isOrderType = (value: string | null): value is OrderType =>
   ORDER_TYPES.some((type) => type === value)
+
+/** Turns the result of sending an order into what the screen shows; a failed print is never silent. */
+function sendOutcome(result: SendOrderResult): Outcome {
+  const failed = result.print.filter((outcome) => outcome.status === 'FAILED')
+  const first = failed[0]
+  if (!first) return { order: result.order }
+  const names = failed.map((outcome) => outcome.kotNumber).join(', ')
+  return {
+    order: result.order,
+    notice: `The order was sent to the kitchen, but ${names} could not be printed. The ticket is shown so it can be printed from this computer.`,
+    preview: { kotId: first.kotId, reason: first.error }
+  }
+}
+
+function previewFrom(state: unknown): PreviewRequest | null {
+  if (typeof state === 'object' && state !== null && 'preview' in state) {
+    const value = state.preview
+    if (
+      typeof value === 'object' &&
+      value !== null &&
+      'kotId' in value &&
+      typeof value.kotId === 'string'
+    ) {
+      const reason = 'reason' in value && typeof value.reason === 'string' ? value.reason : null
+      return { kotId: value.kotId, reason }
+    }
+  }
+  return null
+}
 
 function noticeFrom(state: unknown): string | null {
   if (typeof state === 'object' && state !== null && 'notice' in state) {
@@ -146,6 +188,10 @@ function OrderScreen({ order, seed }: { order: OrderDetail | null; seed: NewOrde
   const refresh = useRefreshOrders()
   const canOperate = usePermission('orders.operate')
   const canCancel = usePermission('orders.cancel')
+  const canKitchen = usePermission('kitchen.operate')
+  const canBill = usePermission('billing.operate')
+  const canViewBills = usePermission('billing.view')
+  const canTransfer = usePermission('tables.transfer')
 
   const [type, setType] = useState<OrderType>(order?.type ?? seed?.type ?? 'TAKEAWAY')
   const [details, setDetails] = useState<DetailsValues>(
@@ -156,7 +202,9 @@ function OrderScreen({ order, seed }: { order: OrderDetail | null; seed: NewOrde
   const [picked, setPicked] = useState<PosItem | null>(null)
   const [confirming, setConfirming] = useState<Confirming>(null)
   const [editingDetails, setEditingDetails] = useState(false)
+  const [transferring, setTransferring] = useState(false)
   const [notice, setNotice] = useState<string | null>(noticeFrom(location.state))
+  const [preview, setPreview] = useState<PreviewRequest | null>(previewFrom(location.state))
 
   const status = order?.status ?? null
   const closed = status !== null && CLOSED_ORDER_STATUSES.includes(status)
@@ -180,16 +228,17 @@ function OrderScreen({ order, seed }: { order: OrderDetail | null; seed: NewOrde
 
   const act = useMutation({
     mutationFn: (work: Work) => work(),
-    onSuccess: async ({ order: saved, notice: message }) => {
+    onSuccess: async ({ order: saved, notice: message, preview: toPreview }) => {
       queryClient.setQueryData(ORDER_KEYS.detail(saved.id), saved)
       await refresh()
       if (order === null) {
         void navigate(`/pos/orders/${saved.id}`, {
           replace: true,
-          state: message ? { notice: message } : null
+          state: message || toPreview ? { notice: message, preview: toPreview } : null
         })
-      } else if (message) {
-        setNotice(message)
+      } else {
+        if (message) setNotice(message)
+        if (toPreview) setPreview(toPreview)
       }
     }
   })
@@ -245,7 +294,7 @@ function OrderScreen({ order, seed }: { order: OrderDetail | null; seed: NewOrde
     if (order) {
       run(async () => {
         const current = cart.length > 0 ? await saveCart(order) : order
-        return { order: await orderService.send(current.id) }
+        return sendOutcome(await orderService.send(current.id))
       })
       return
     }
@@ -254,7 +303,7 @@ function OrderScreen({ order, seed }: { order: OrderDetail | null; seed: NewOrde
     run(async () => {
       const created = await orderService.create(input)
       try {
-        return { order: await orderService.send(created.id) }
+        return sendOutcome(await orderService.send(created.id))
       } catch (failure) {
         return {
           order: created,
@@ -267,6 +316,22 @@ function OrderScreen({ order, seed }: { order: OrderDetail | null; seed: NewOrde
   const moveTo = (next: 'SERVED' | 'BILL_REQUESTED'): void => {
     if (!order) return
     run(async () => ({ order: await orderService.setStatus({ id: order.id, status: next }) }))
+  }
+
+  /** Makes the bill from the served order (the system works out every amount), then opens it. */
+  const generateBill = (): void => {
+    if (!order) return
+    let billId = ''
+    run(
+      async () => {
+        const bill = await billService.generate({ orderId: order.id })
+        billId = bill.id
+        return { order: await orderService.get(order.id) }
+      },
+      () => {
+        void navigate(`/pos/bills/${billId}`)
+      }
+    )
   }
 
   const changeLine = (line: OrderLine, quantity: number): void => {
@@ -376,7 +441,7 @@ function OrderScreen({ order, seed }: { order: OrderDetail | null; seed: NewOrde
                   setErrors({})
                 }}
                 className={cn(
-                  'h-9 rounded-full border px-4 text-sm font-semibold transition-colors',
+                  'h-9 rounded-full border px-4 text-sm font-semibold transition-colors touch:h-11',
                   type === entry
                     ? 'border-primary bg-primary text-primary-foreground'
                     : 'bg-card hover:bg-accent'
@@ -388,11 +453,24 @@ function OrderScreen({ order, seed }: { order: OrderDetail | null; seed: NewOrde
           </div>
         )}
 
-        {order && canOperate && !closed && (
+        {order && canTransfer && !closed && order.type === 'DINE_IN' && (
           <Button
             variant="outline"
             size="sm"
             className="ml-auto"
+            onClick={() => {
+              setTransferring(true)
+            }}
+          >
+            <ArrowRightLeft /> Shift / merge
+          </Button>
+        )}
+
+        {order && canOperate && !closed && (
+          <Button
+            variant="outline"
+            size="sm"
+            className={cn(!(canTransfer && order.type === 'DINE_IN') && 'ml-auto')}
             onClick={() => {
               setEditingDetails(true)
             }}
@@ -470,9 +548,21 @@ function OrderScreen({ order, seed }: { order: OrderDetail | null; seed: NewOrde
             <p className="text-xs text-muted-foreground">Deliver to: {order.deliveryAddress}</p>
           )}
           {order?.notes && <p className="text-xs text-muted-foreground">Note: {order.notes}</p>}
+          {order && order.kots.length > 0 && (
+            <OrderTickets
+              kots={order.kots}
+              canPrint={canOperate || canKitchen}
+              canCancel={canCancel}
+              onPreview={(kotId) => {
+                setPreview({ kotId, reason: null })
+              }}
+            />
+          )}
           {status === 'BILL_REQUESTED' && canOperate && (
             <p className="text-xs text-muted-foreground">
-              The bill was requested. Reopen the order to change items.
+              {order?.bill
+                ? 'A bill was generated. Cancel the bill to change items.'
+                : 'The bill was requested. Reopen the order to change items.'}
             </p>
           )}
           {error && !confirming && (
@@ -506,7 +596,23 @@ function OrderScreen({ order, seed }: { order: OrderDetail | null; seed: NewOrde
                 <CheckCheck /> Mark served
               </Button>
             )}
-            {canOperate && status === 'SERVED' && !hasNew && (
+            {order?.bill && canViewBills && (
+              <Button asChild variant="outline" className="col-span-2">
+                <Link to={`/pos/bills/${order.bill.id}`}>
+                  <Receipt /> View bill {order.bill.billNumber} (
+                  {formatMoney(order.bill.grandTotal)})
+                </Link>
+              </Button>
+            )}
+            {canBill &&
+              !order?.bill &&
+              !hasNew &&
+              (status === 'SERVED' || status === 'BILL_REQUESTED') && (
+                <Button className="col-span-2" disabled={busy} onClick={generateBill}>
+                  <Receipt /> Generate bill
+                </Button>
+              )}
+            {canOperate && !canBill && status === 'SERVED' && !hasNew && (
               <Button
                 className="col-span-2"
                 disabled={busy}
@@ -517,7 +623,7 @@ function OrderScreen({ order, seed }: { order: OrderDetail | null; seed: NewOrde
                 <Receipt /> Request bill
               </Button>
             )}
-            {canOperate && status === 'BILL_REQUESTED' && (
+            {canOperate && status === 'BILL_REQUESTED' && !order?.bill && (
               <Button
                 variant="secondary"
                 className="col-span-2"
@@ -557,6 +663,15 @@ function OrderScreen({ order, seed }: { order: OrderDetail | null; seed: NewOrde
         </OrderPanel>
       </div>
 
+      <KotPreviewDialog
+        kotId={preview?.kotId ?? null}
+        notice={preview?.reason ?? null}
+        canPrint={canOperate || canKitchen}
+        onClose={() => {
+          setPreview(null)
+        }}
+      />
+
       <ItemDialog
         item={picked}
         onAdd={addLine}
@@ -586,6 +701,26 @@ function OrderScreen({ order, seed }: { order: OrderDetail | null; seed: NewOrde
           setConfirming(null)
         }}
       />
+
+      {order && (
+        <TableTransferDialog
+          open={transferring}
+          order={order}
+          mergeBlockedReason={
+            hasNew ? 'Save or send the new items on screen before merging tables.' : undefined
+          }
+          onClose={() => {
+            setTransferring(false)
+          }}
+          onDone={(result) => {
+            setTransferring(false)
+            queryClient.setQueryData(ORDER_KEYS.detail(result.order.id), result.order)
+            if (result.order.id === order.id) setNotice(result.notice)
+            else
+              void navigate(`/pos/orders/${result.order.id}`, { state: { notice: result.notice } })
+          }}
+        />
+      )}
 
       {order && (
         <DetailsDialog

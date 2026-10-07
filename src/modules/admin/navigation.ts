@@ -17,7 +17,6 @@ import {
   ShieldCheck,
   ShoppingCart,
   Table2,
-  Tag,
   Truck,
   Users,
   UsersRound,
@@ -61,8 +60,20 @@ export const ADMIN_NAV: AdminNavGroup[] = [
         permission: 'tables.view'
       },
       { label: 'Kitchen', to: '/admin/kitchen', icon: ChefHat, enabled: false, phase: 7 },
-      { label: 'KOT', to: '/admin/kot', icon: FileText, enabled: false, phase: 6 },
-      { label: 'Bills', to: '/admin/bills', icon: Receipt, enabled: false, phase: 8 },
+      {
+        label: 'KOT',
+        to: '/admin/kot',
+        icon: FileText,
+        enabled: true,
+        permission: 'orders.view'
+      },
+      {
+        label: 'Bills',
+        to: '/admin/bills',
+        icon: Receipt,
+        enabled: true,
+        permission: 'billing.view'
+      },
       {
         label: 'Reservations',
         to: '/admin/reservations',
@@ -112,9 +123,20 @@ export const ADMIN_NAV: AdminNavGroup[] = [
         enabled: true,
         permission: 'roles.view'
       },
-      { label: 'Taxes', to: '/admin/taxes', icon: Percent, enabled: false, phase: 8 },
-      { label: 'Discounts', to: '/admin/discounts', icon: Tag, enabled: false, phase: 8 },
-      { label: 'Printers', to: '/admin/printers', icon: Printer, enabled: false, phase: 18 },
+      {
+        label: 'Billing settings',
+        to: '/admin/billing-settings',
+        icon: Percent,
+        enabled: true,
+        permission: 'billing.view'
+      },
+      {
+        label: 'Printers',
+        to: '/admin/printers',
+        icon: Printer,
+        enabled: true,
+        permission: 'printers.view'
+      },
       {
         label: 'Restaurant settings',
         to: '/admin/settings',

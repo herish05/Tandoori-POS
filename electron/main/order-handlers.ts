@@ -11,6 +11,7 @@ import {
   updateLineInputSchema,
   updateOrderInputSchema
 } from '@shared/orders'
+import type { SendOrderResult } from '@shared/kitchen'
 import { emptyInputSchema } from '@shared/schemas'
 import type { IpcRegistrar } from './ipc/registrar'
 import type { Services } from './services'
@@ -65,8 +66,21 @@ export function registerOrderHandlers(registrar: IpcRegistrar, services: Service
     OPERATE,
     (input, ctx) => orders.removeLine(ctx, input)
   )
-  registrar.handleProtected(IPC_CHANNELS.ordersSend, idInputSchema, OPERATE, (input, ctx) =>
-    orders.send(ctx, input.id)
+  // Sending issues the kitchen tickets and prints them. A printer problem never undoes the send:
+  // the result says which tickets did not print so the screen can offer a reprint.
+  registrar.handleProtected(
+    IPC_CHANNELS.ordersSend,
+    idInputSchema,
+    OPERATE,
+    async (input, ctx): Promise<SendOrderResult> => {
+      const sent = orders.sendAndGetKots(ctx, input.id)
+      const print = await services.print.printKots(ctx, sent.kotIds)
+      return {
+        order: orders.get(input.id),
+        kots: sent.kotIds.map((id) => services.kots.get(id)),
+        print
+      }
+    }
   )
   registrar.handleProtected(
     IPC_CHANNELS.ordersSetStatus,

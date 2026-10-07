@@ -91,7 +91,9 @@ const api: TandooriApi = {
     open: (input) => invoke(IPC_CHANNELS.tablesOpen, input),
     close: (id) => invoke(IPC_CHANNELS.tablesClose, { id }),
     block: (id) => invoke(IPC_CHANNELS.tablesBlock, { id }),
-    unblock: (id) => invoke(IPC_CHANNELS.tablesUnblock, { id })
+    unblock: (id) => invoke(IPC_CHANNELS.tablesUnblock, { id }),
+    shift: (input) => invoke(IPC_CHANNELS.tablesShift, input),
+    merge: (input) => invoke(IPC_CHANNELS.tablesMerge, input)
   },
   menu: {
     stations: {
@@ -149,6 +151,42 @@ const api: TandooriApi = {
     send: (id) => invoke(IPC_CHANNELS.ordersSend, { id }),
     setStatus: (input) => invoke(IPC_CHANNELS.ordersSetStatus, input),
     cancel: (input) => invoke(IPC_CHANNELS.ordersCancel, input)
+  },
+  kots: {
+    list: (filter) => invoke(IPC_CHANNELS.kotsList, filter),
+    get: (id) => invoke(IPC_CHANNELS.kotsGet, { id }),
+    board: (input) => invoke(IPC_CHANNELS.kotsBoard, input),
+    setStatus: (input) => invoke(IPC_CHANNELS.kotsSetStatus, input),
+    cancel: (input) => invoke(IPC_CHANNELS.kotsCancel, input),
+    preview: (input) => invoke(IPC_CHANNELS.kotsPreview, input),
+    print: (id) => invoke(IPC_CHANNELS.kotsPrint, { id })
+  },
+  billing: {
+    settings: () => invoke(IPC_CHANNELS.billingSettingsGet),
+    updateSettings: (input) => invoke(IPC_CHANNELS.billingSettingsUpdate, input)
+  },
+  bills: {
+    list: (filter) => invoke(IPC_CHANNELS.billsList, filter),
+    get: (id) => invoke(IPC_CHANNELS.billsGet, { id }),
+    generate: (input) => invoke(IPC_CHANNELS.billsGenerate, input),
+    applyDiscount: (input) => invoke(IPC_CHANNELS.billsApplyDiscount, input),
+    removeDiscount: (input) => invoke(IPC_CHANNELS.billsRemoveDiscount, input),
+    cancel: (input) => invoke(IPC_CHANNELS.billsCancel, input),
+    pay: (input) => invoke(IPC_CHANNELS.billsPay, input),
+    refund: (input) => invoke(IPC_CHANNELS.billsRefund, input)
+  },
+  receipts: {
+    preview: (input) => invoke(IPC_CHANNELS.receiptsPreview, input),
+    print: (input) => invoke(IPC_CHANNELS.receiptsPrint, input),
+    history: (billId) => invoke(IPC_CHANNELS.receiptsHistory, { id: billId })
+  },
+  printers: {
+    list: () => invoke(IPC_CHANNELS.printersList),
+    create: (input) => invoke(IPC_CHANNELS.printersCreate, input),
+    update: (input) => invoke(IPC_CHANNELS.printersUpdate, input),
+    delete: (id) => invoke(IPC_CHANNELS.printersDelete, { id }),
+    test: (id) => invoke(IPC_CHANNELS.printersTest, { id }),
+    systemDevices: () => invoke(IPC_CHANNELS.printersSystemDevices)
   }
 }
 

@@ -41,7 +41,7 @@ function FilterChip({
       aria-pressed={active}
       onClick={onClick}
       className={cn(
-        'flex h-9 items-center gap-2 rounded-full border px-4 text-sm font-semibold transition-colors',
+        'flex h-9 items-center gap-2 rounded-full border px-4 text-sm font-semibold transition-colors touch:h-11',
         active
           ? 'border-primary bg-primary text-primary-foreground'
           : 'bg-card text-foreground hover:bg-accent'
@@ -74,7 +74,7 @@ export function PosPage() {
         setParams(value === 'orders' ? { view: 'orders' } : {}, { replace: true })
       }}
       className={cn(
-        'h-9 rounded-md px-4 text-sm font-semibold transition-colors',
+        'h-9 rounded-md px-4 text-sm font-semibold transition-colors touch:h-11',
         view === value ? 'bg-primary text-primary-foreground' : 'hover:bg-accent'
       )}
     >

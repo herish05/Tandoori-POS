@@ -18,12 +18,21 @@ export const PERMISSION_CODES = [
   'tables.view',
   'tables.manage',
   'tables.operate',
+  'tables.transfer',
   'menu.view',
   'menu.manage',
   'menu.operate',
   'orders.view',
   'orders.operate',
-  'orders.cancel'
+  'orders.cancel',
+  'kitchen.operate',
+  'printers.view',
+  'printers.manage',
+  'billing.view',
+  'billing.operate',
+  'billing.discount',
+  'billing.refund',
+  'billing.manage'
 ] as const
 
 export type PermissionCode = (typeof PERMISSION_CODES)[number]
@@ -100,6 +109,11 @@ export const PERMISSION_META: Record<PermissionCode, PermissionMeta> = {
     group: 'Tables',
     description: 'Open a table for guests, close it, and block or unblock it.'
   },
+  'tables.transfer': {
+    label: 'Shift and merge tables',
+    group: 'Tables',
+    description: 'Move a running order to another table, or merge two running tables into one.'
+  },
   'menu.view': {
     label: 'View the menu',
     group: 'Menu',
@@ -131,6 +145,46 @@ export const PERMISSION_META: Record<PermissionCode, PermissionMeta> = {
     label: 'Cancel orders and items',
     group: 'Orders',
     description: 'Cancel an order, or an item that was already sent to the kitchen.'
+  },
+  'kitchen.operate': {
+    label: 'Work the kitchen tickets',
+    group: 'Kitchen',
+    description: 'Accept, start, finish and serve kitchen tickets.'
+  },
+  'printers.view': {
+    label: 'View printers',
+    group: 'Printing',
+    description: 'See the printers set up for kitchen tickets.'
+  },
+  'printers.manage': {
+    label: 'Manage printers',
+    group: 'Printing',
+    description: 'Add, edit and remove printers, and print a test page.'
+  },
+  'billing.view': {
+    label: 'View bills',
+    group: 'Billing',
+    description: 'See bills, their totals, taxes and payments.'
+  },
+  'billing.operate': {
+    label: 'Bill and take payment',
+    group: 'Billing',
+    description: 'Make a bill from an order, record payments, and cancel an unpaid bill.'
+  },
+  'billing.discount': {
+    label: 'Give discounts',
+    group: 'Billing',
+    description: 'Apply a discount to a bill or to an item on it, and remove one again.'
+  },
+  'billing.refund': {
+    label: 'Give refunds',
+    group: 'Billing',
+    description: 'Return money on a paid bill, in full or in part.'
+  },
+  'billing.manage': {
+    label: 'Manage billing settings',
+    group: 'Billing',
+    description: 'Change the GST split, service charge and round off used on new bills.'
   }
 }
 
@@ -140,7 +194,11 @@ export const PERMISSION_META: Record<PermissionCode, PermissionMeta> = {
  */
 export const ALSO_IMPLIED: Partial<Record<PermissionCode, readonly PermissionCode[]>> = {
   'menu.manage': ['menu.operate'],
-  'orders.cancel': ['orders.operate', 'orders.view']
+  'orders.cancel': ['orders.operate', 'orders.view'],
+  'tables.transfer': ['tables.view', 'orders.view'],
+  'kitchen.operate': ['kitchen.access'],
+  'billing.discount': ['billing.operate', 'billing.view'],
+  'billing.refund': ['billing.view']
 }
 
 export const OWNER_ROLE_NAME = 'OWNER'
