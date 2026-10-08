@@ -39,7 +39,22 @@ export const PERMISSION_CODES = [
   'reservations.operate',
   'inventory.view',
   'inventory.manage',
-  'inventory.operate'
+  'inventory.operate',
+  'suppliers.view',
+  'suppliers.manage',
+  'purchases.view',
+  'purchases.operate',
+  'purchases.pay',
+  'expenses.view',
+  'expenses.operate',
+  'expenses.manage',
+  'cash.view',
+  'cash.manage',
+  'day.view',
+  'day.close',
+  'day.reopen',
+  'reports.view',
+  'reports.export'
 ] as const
 
 export type PermissionCode = (typeof PERMISSION_CODES)[number]
@@ -227,6 +242,81 @@ export const PERMISSION_META: Record<PermissionCode, PermissionMeta> = {
     label: 'Record stock changes',
     group: 'Inventory',
     description: 'Record stock coming in, wastage and stock counts.'
+  },
+  'suppliers.view': {
+    label: 'View suppliers',
+    group: 'Purchasing',
+    description: 'See suppliers, their contact details and what is owed to them.'
+  },
+  'suppliers.manage': {
+    label: 'Manage suppliers',
+    group: 'Purchasing',
+    description: 'Add, edit, deactivate and delete suppliers.'
+  },
+  'purchases.view': {
+    label: 'View purchases',
+    group: 'Purchasing',
+    description: 'See purchase invoices, what was bought and what has been paid.'
+  },
+  'purchases.operate': {
+    label: 'Record purchases',
+    group: 'Purchasing',
+    description: 'Create and edit purchase drafts, receive them into stock and cancel drafts.'
+  },
+  'purchases.pay': {
+    label: 'Pay suppliers',
+    group: 'Purchasing',
+    description: 'Record payments to suppliers and void a wrong payment.'
+  },
+  'expenses.view': {
+    label: 'View expenses',
+    group: 'Expenses and cash',
+    description: 'See recorded expenses and what was spent by category.'
+  },
+  'expenses.operate': {
+    label: 'Record expenses',
+    group: 'Expenses and cash',
+    description: 'Record, correct and void expenses.'
+  },
+  'expenses.manage': {
+    label: 'Manage expense categories',
+    group: 'Expenses and cash',
+    description: 'Add, rename, deactivate and delete expense categories.'
+  },
+  'cash.view': {
+    label: 'View the cash drawer',
+    group: 'Expenses and cash',
+    description: 'See the cash book and how much cash the drawer should hold.'
+  },
+  'cash.manage': {
+    label: 'Manage the cash drawer',
+    group: 'Expenses and cash',
+    description: 'Set the opening float, add or take out cash, and void a wrong entry.'
+  },
+  'day.view': {
+    label: 'View day closings',
+    group: 'Day closing',
+    description: 'See how a day is going and the history of closed days.'
+  },
+  'day.close': {
+    label: 'Close the day',
+    group: 'Day closing',
+    description: 'Count the cash and close a day. Nothing can be dated inside a closed day.'
+  },
+  'day.reopen': {
+    label: 'Reopen a closed day',
+    group: 'Day closing',
+    description: 'Reopen the latest closed day, with a reason, so it can be corrected.'
+  },
+  'reports.view': {
+    label: 'View reports',
+    group: 'Reports',
+    description: 'Run the sales, kitchen, stock, purchasing, expense and day closing reports.'
+  },
+  'reports.export': {
+    label: 'Print and export reports',
+    group: 'Reports',
+    description: 'Print a report, save it as a PDF or export it as a CSV file for a spreadsheet.'
   }
 }
 
@@ -241,7 +331,13 @@ export const ALSO_IMPLIED: Partial<Record<PermissionCode, readonly PermissionCod
   'kitchen.operate': ['kitchen.access'],
   'billing.discount': ['billing.operate', 'billing.view'],
   'billing.refund': ['billing.view'],
-  'inventory.manage': ['inventory.operate']
+  'inventory.manage': ['inventory.operate'],
+  'purchases.operate': ['suppliers.view', 'inventory.view'],
+  'purchases.pay': ['purchases.view'],
+  'expenses.manage': ['expenses.operate'],
+  'day.close': ['day.view'],
+  'day.reopen': ['day.view'],
+  'reports.export': ['reports.view']
 }
 
 export const OWNER_ROLE_NAME = 'OWNER'

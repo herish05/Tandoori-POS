@@ -1,5 +1,6 @@
 import type { PermissionCode } from '@shared/permissions'
 import {
+  Banknote,
   BarChart3,
   Boxes,
   Calendar,
@@ -9,6 +10,7 @@ import {
   History,
   LayoutDashboard,
   type LucideIcon,
+  Lock,
   Percent,
   Printer,
   Receipt,
@@ -112,10 +114,48 @@ export const ADMIN_NAV: AdminNavGroup[] = [
         enabled: true,
         permission: 'inventory.view'
       },
-      { label: 'Purchases', to: '/admin/purchases', icon: ShoppingCart, enabled: false, phase: 14 },
-      { label: 'Suppliers', to: '/admin/suppliers', icon: Truck, enabled: false, phase: 14 },
-      { label: 'Expenses', to: '/admin/expenses', icon: Wallet, enabled: false, phase: 15 },
-      { label: 'Reports', to: '/admin/reports', icon: BarChart3, enabled: false, phase: 17 }
+      {
+        label: 'Purchases',
+        to: '/admin/purchases',
+        icon: ShoppingCart,
+        enabled: true,
+        permission: 'purchases.view'
+      },
+      {
+        label: 'Suppliers',
+        to: '/admin/suppliers',
+        icon: Truck,
+        enabled: true,
+        permission: 'suppliers.view'
+      },
+      {
+        label: 'Expenses',
+        to: '/admin/expenses',
+        icon: Wallet,
+        enabled: true,
+        permission: 'expenses.view'
+      },
+      {
+        label: 'Cash drawer',
+        to: '/admin/cash',
+        icon: Banknote,
+        enabled: true,
+        permission: 'cash.view'
+      },
+      {
+        label: 'Day closing',
+        to: '/admin/day-closing',
+        icon: Lock,
+        enabled: true,
+        permission: 'day.view'
+      },
+      {
+        label: 'Reports',
+        to: '/admin/reports',
+        icon: BarChart3,
+        enabled: true,
+        permission: 'reports.view'
+      }
     ]
   },
   {

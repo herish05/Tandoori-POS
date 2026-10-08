@@ -133,6 +133,56 @@ import type {
   WastageInput
 } from './inventory'
 import type {
+  CancelPurchaseInput,
+  CreatePurchaseInput,
+  CreateSupplierInput,
+  Purchase,
+  PurchaseFilterInput,
+  PurchaseSummary,
+  PurchasingSummary,
+  RecordPaymentInput,
+  SetSupplierActiveInput,
+  Supplier,
+  SupplierFilterInput,
+  UpdatePurchaseInput,
+  UpdateSupplierInput,
+  VoidPaymentInput
+} from './purchasing'
+import type {
+  CashBook,
+  CashBookFilterInput,
+  CashEntry,
+  CashEntryFilterInput,
+  CashSummary,
+  RecordCashEntryInput,
+  VoidCashEntryInput
+} from './cash'
+import type {
+  CloseDayInput,
+  DayClosing,
+  DayClosingFilterInput,
+  DayClosingListItem,
+  DayOverview,
+  DayStatus,
+  DayStatusInput,
+  ReopenDayInput
+} from './day-closing'
+import type { ReportFileResult, ReportFilterInput, ReportOptions, ReportResult } from './reports'
+import type {
+  CreateExpenseCategoryInput,
+  CreateExpenseInput,
+  Expense,
+  ExpenseCategory,
+  ExpenseCategoryFilterInput,
+  ExpenseFilterInput,
+  ExpenseSummary,
+  ExpenseSummaryFilterInput,
+  SetExpenseCategoryActiveInput,
+  UpdateExpenseCategoryInput,
+  UpdateExpenseInput,
+  VoidExpenseInput
+} from './expenses'
+import type {
   AreaSummary,
   CreateAreaInput,
   CreateTableInput,
@@ -356,6 +406,62 @@ export interface TandooriApi {
     coverage: () => Promise<IpcResult<RecipeCoverage[]>>
     get: (menuItemId: string) => Promise<IpcResult<Recipe>>
     set: (input: SetRecipeInput) => Promise<IpcResult<Recipe>>
+  }
+  suppliers: {
+    list: (filter: SupplierFilterInput) => Promise<IpcResult<Supplier[]>>
+    get: (id: string) => Promise<IpcResult<Supplier>>
+    create: (input: CreateSupplierInput) => Promise<IpcResult<Supplier>>
+    update: (input: UpdateSupplierInput) => Promise<IpcResult<Supplier>>
+    setActive: (input: SetSupplierActiveInput) => Promise<IpcResult<Supplier>>
+    delete: (id: string) => Promise<IpcResult<null>>
+  }
+  purchases: {
+    summary: () => Promise<IpcResult<PurchasingSummary>>
+    list: (filter: PurchaseFilterInput) => Promise<IpcResult<PurchaseSummary[]>>
+    get: (id: string) => Promise<IpcResult<Purchase>>
+    create: (input: CreatePurchaseInput) => Promise<IpcResult<Purchase>>
+    update: (input: UpdatePurchaseInput) => Promise<IpcResult<Purchase>>
+    receive: (id: string) => Promise<IpcResult<Purchase>>
+    cancel: (input: CancelPurchaseInput) => Promise<IpcResult<Purchase>>
+    recordPayment: (input: RecordPaymentInput) => Promise<IpcResult<Purchase>>
+    voidPayment: (input: VoidPaymentInput) => Promise<IpcResult<Purchase>>
+  }
+  expenseCategories: {
+    list: (filter: ExpenseCategoryFilterInput) => Promise<IpcResult<ExpenseCategory[]>>
+    create: (input: CreateExpenseCategoryInput) => Promise<IpcResult<ExpenseCategory>>
+    update: (input: UpdateExpenseCategoryInput) => Promise<IpcResult<ExpenseCategory>>
+    setActive: (input: SetExpenseCategoryActiveInput) => Promise<IpcResult<ExpenseCategory>>
+    delete: (id: string) => Promise<IpcResult<null>>
+  }
+  expenses: {
+    list: (filter: ExpenseFilterInput) => Promise<IpcResult<Expense[]>>
+    get: (id: string) => Promise<IpcResult<Expense>>
+    summary: (filter: ExpenseSummaryFilterInput) => Promise<IpcResult<ExpenseSummary>>
+    create: (input: CreateExpenseInput) => Promise<IpcResult<Expense>>
+    update: (input: UpdateExpenseInput) => Promise<IpcResult<Expense>>
+    void: (input: VoidExpenseInput) => Promise<IpcResult<Expense>>
+  }
+  cash: {
+    summary: () => Promise<IpcResult<CashSummary>>
+    book: (filter: CashBookFilterInput) => Promise<IpcResult<CashBook>>
+    listEntries: (filter: CashEntryFilterInput) => Promise<IpcResult<CashEntry[]>>
+    recordEntry: (input: RecordCashEntryInput) => Promise<IpcResult<CashEntry>>
+    voidEntry: (input: VoidCashEntryInput) => Promise<IpcResult<CashEntry>>
+  }
+  day: {
+    overview: () => Promise<IpcResult<DayOverview>>
+    status: (input: DayStatusInput) => Promise<IpcResult<DayStatus>>
+    list: (filter: DayClosingFilterInput) => Promise<IpcResult<DayClosingListItem[]>>
+    get: (id: string) => Promise<IpcResult<DayClosing>>
+    close: (input: CloseDayInput) => Promise<IpcResult<DayClosing>>
+    reopen: (input: ReopenDayInput) => Promise<IpcResult<DayClosing>>
+  }
+  reports: {
+    run: (filter: ReportFilterInput) => Promise<IpcResult<ReportResult>>
+    options: () => Promise<IpcResult<ReportOptions>>
+    exportCsv: (filter: ReportFilterInput) => Promise<IpcResult<ReportFileResult>>
+    exportPdf: (filter: ReportFilterInput) => Promise<IpcResult<ReportFileResult>>
+    print: (filter: ReportFilterInput) => Promise<IpcResult<null>>
   }
   printers: {
     list: () => Promise<IpcResult<PrinterConfig[]>>

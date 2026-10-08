@@ -218,6 +218,62 @@ const api: TandooriApi = {
     get: (menuItemId) => invoke(IPC_CHANNELS.recipesGet, { menuItemId }),
     set: (input) => invoke(IPC_CHANNELS.recipesSet, input)
   },
+  suppliers: {
+    list: (filter) => invoke(IPC_CHANNELS.suppliersList, filter),
+    get: (id) => invoke(IPC_CHANNELS.suppliersGet, { id }),
+    create: (input) => invoke(IPC_CHANNELS.suppliersCreate, input),
+    update: (input) => invoke(IPC_CHANNELS.suppliersUpdate, input),
+    setActive: (input) => invoke(IPC_CHANNELS.suppliersSetActive, input),
+    delete: (id) => invoke(IPC_CHANNELS.suppliersDelete, { id })
+  },
+  purchases: {
+    summary: () => invoke(IPC_CHANNELS.purchasesSummary),
+    list: (filter) => invoke(IPC_CHANNELS.purchasesList, filter),
+    get: (id) => invoke(IPC_CHANNELS.purchasesGet, { id }),
+    create: (input) => invoke(IPC_CHANNELS.purchasesCreate, input),
+    update: (input) => invoke(IPC_CHANNELS.purchasesUpdate, input),
+    receive: (id) => invoke(IPC_CHANNELS.purchasesReceive, { id }),
+    cancel: (input) => invoke(IPC_CHANNELS.purchasesCancel, input),
+    recordPayment: (input) => invoke(IPC_CHANNELS.purchasesRecordPayment, input),
+    voidPayment: (input) => invoke(IPC_CHANNELS.purchasesVoidPayment, input)
+  },
+  expenseCategories: {
+    list: (filter) => invoke(IPC_CHANNELS.expenseCategoriesList, filter),
+    create: (input) => invoke(IPC_CHANNELS.expenseCategoriesCreate, input),
+    update: (input) => invoke(IPC_CHANNELS.expenseCategoriesUpdate, input),
+    setActive: (input) => invoke(IPC_CHANNELS.expenseCategoriesSetActive, input),
+    delete: (id) => invoke(IPC_CHANNELS.expenseCategoriesDelete, { id })
+  },
+  expenses: {
+    list: (filter) => invoke(IPC_CHANNELS.expensesList, filter),
+    get: (id) => invoke(IPC_CHANNELS.expensesGet, { id }),
+    summary: (filter) => invoke(IPC_CHANNELS.expensesSummary, filter),
+    create: (input) => invoke(IPC_CHANNELS.expensesCreate, input),
+    update: (input) => invoke(IPC_CHANNELS.expensesUpdate, input),
+    void: (input) => invoke(IPC_CHANNELS.expensesVoid, input)
+  },
+  cash: {
+    summary: () => invoke(IPC_CHANNELS.cashSummary),
+    book: (filter) => invoke(IPC_CHANNELS.cashBook, filter),
+    listEntries: (filter) => invoke(IPC_CHANNELS.cashEntriesList, filter),
+    recordEntry: (input) => invoke(IPC_CHANNELS.cashRecordEntry, input),
+    voidEntry: (input) => invoke(IPC_CHANNELS.cashVoidEntry, input)
+  },
+  day: {
+    overview: () => invoke(IPC_CHANNELS.dayOverview),
+    status: (input) => invoke(IPC_CHANNELS.dayStatus, input),
+    list: (filter) => invoke(IPC_CHANNELS.dayList, filter),
+    get: (id) => invoke(IPC_CHANNELS.dayGet, { id }),
+    close: (input) => invoke(IPC_CHANNELS.dayClose, input),
+    reopen: (input) => invoke(IPC_CHANNELS.dayReopen, input)
+  },
+  reports: {
+    run: (filter) => invoke(IPC_CHANNELS.reportsRun, filter),
+    options: () => invoke(IPC_CHANNELS.reportsOptions),
+    exportCsv: (filter) => invoke(IPC_CHANNELS.reportsExportCsv, filter),
+    exportPdf: (filter) => invoke(IPC_CHANNELS.reportsExportPdf, filter),
+    print: (filter) => invoke(IPC_CHANNELS.reportsPrint, filter)
+  },
   printers: {
     list: () => invoke(IPC_CHANNELS.printersList),
     create: (input) => invoke(IPC_CHANNELS.printersCreate, input),

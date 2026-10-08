@@ -2,7 +2,7 @@
 
 Offline-first restaurant POS and management desktop app for **TANDOORI BITES**, Rampura Phul, Punjab.
 
-Current status: **Phase 13 – Inventory and recipes** complete (Phases 1 to 6 and 8 to 12 before it; the kitchen
+Current status: **Phase 17 – Reporting** complete (Phases 1 to 6 and 8 to 16 before it; the kitchen
 display phase was skipped for now). Built for Windows terminals with a touch screen and a mouse.
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the architecture and the phase plan.
 

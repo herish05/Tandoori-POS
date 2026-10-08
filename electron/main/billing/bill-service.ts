@@ -28,6 +28,7 @@ import {
   type DiscountSpec
 } from './calculator'
 import type { BillingSettingsService } from './settings-service'
+import type { DayLock } from '../finance/day-lock'
 import {
   BILL_STATUS_LABELS,
   BILLABLE_ORDER_STATUSES,
@@ -89,7 +90,8 @@ export class BillService {
     private readonly db: AppDatabase,
     private readonly audit: AuditService,
     private readonly clock: Clock,
-    private readonly settings: BillingSettingsService
+    private readonly settings: BillingSettingsService,
+    private readonly lock: DayLock
   ) {}
 
   // --- Reads -----------------------------------------------------------------------------
@@ -332,6 +334,7 @@ export class BillService {
    */
   pay(auth: AuthContext, input: PayBillData): PayBillResult {
     const changeDue = this.db.transaction((tx) => {
+      this.lock.assertOpen(tx, 'take a payment')
       const { bill, order } = this.requireBill(tx, input.billId)
       if (!PAYABLE_BILL_STATUSES.includes(bill.status)) {
         throw new AppError(
@@ -418,6 +421,7 @@ export class BillService {
    */
   refund(auth: AuthContext, input: RefundBillData): RefundBillResult {
     const { refundId, billCancelled } = this.db.transaction((tx) => {
+      this.lock.assertOpen(tx, 'give a refund')
       const { bill, order } = this.requireBill(tx, input.billId)
       if (!REFUNDABLE_BILL_STATUSES.includes(bill.status)) {
         throw new AppError(

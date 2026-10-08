@@ -3,7 +3,7 @@ import type { DbExecutor } from '../db/client'
 import { documentSequences, restaurants } from '../db/schema'
 
 /** Document kinds numbered by the sequence table.  */
-export type DocumentKind = 'ORD' | 'KOT' | 'BILL' | 'REF'
+export type DocumentKind = 'ORD' | 'KOT' | 'BILL' | 'REF' | 'PUR' | 'EXP' | 'DAY'
 
 const FALLBACK_PREFIX = 'POS'
 const MAX_PREFIX_LENGTH = 4

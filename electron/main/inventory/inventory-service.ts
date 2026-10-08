@@ -272,6 +272,26 @@ export class InventoryService {
     return this.get(input.itemId)
   }
 
+  /**
+   * Puts bought stock in as part of a larger transaction (a received purchase): sets the item's
+   * latest price and writes the `STOCK_IN` ledger row. The caller audits the whole purchase.
+   */
+  receiveStock(
+    tx: DbExecutor,
+    auth: AuthContext,
+    itemId: string,
+    quantity: number,
+    unitCost: number,
+    reason: string
+  ): void {
+    const current = this.requireItem(tx, itemId)
+    tx.update(inventoryItems)
+      .set({ unitCost, ...markModified(inventoryItems) })
+      .where(eq(inventoryItems.id, current.id))
+      .run()
+    this.post(tx, auth, current, 'STOCK_IN', quantity, { unitCost, reason })
+  }
+
   wastage(auth: AuthContext, input: WastageData): InventoryItem {
     this.db.transaction((tx) => {
       const current = this.requireItem(tx, input.itemId)

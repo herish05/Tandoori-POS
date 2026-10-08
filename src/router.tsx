@@ -8,12 +8,18 @@ import { AuditLogsPage } from '@/pages/AuditLogsPage'
 import { BillingSettingsPage } from '@/pages/BillingSettingsPage'
 import { BillPage } from '@/pages/BillPage'
 import { BillsPage } from '@/pages/BillsPage'
+import { CashPage } from '@/pages/CashPage'
+import { DayClosingPage } from '@/pages/DayClosingPage'
 import { CustomersPage } from '@/pages/CustomersPage'
+import { ExpensesPage } from '@/pages/ExpensesPage'
 import { InventoryPage } from '@/pages/InventoryPage'
+import { PurchasesPage } from '@/pages/PurchasesPage'
+import { SuppliersPage } from '@/pages/SuppliersPage'
 import { KotsPage } from '@/pages/KotsPage'
 import { MenuPage } from '@/pages/MenuPage'
 import { OrderPage } from '@/pages/OrderPage'
 import { PrintersPage } from '@/pages/PrintersPage'
+import { ReportsPage } from '@/pages/ReportsPage'
 import { ReservationsPage } from '@/pages/ReservationsPage'
 import { RestaurantSettingsPage } from '@/pages/RestaurantSettingsPage'
 import { RolesPage } from '@/pages/RolesPage'
@@ -39,6 +45,12 @@ const ADMIN_PAGES: Record<string, ReactNode> = {
   '/admin/reservations': <ReservationsPage />,
   '/admin/customers': <CustomersPage />,
   '/admin/inventory': <InventoryPage />,
+  '/admin/purchases': <PurchasesPage />,
+  '/admin/suppliers': <SuppliersPage />,
+  '/admin/expenses': <ExpensesPage />,
+  '/admin/cash': <CashPage />,
+  '/admin/day-closing': <DayClosingPage />,
+  '/admin/reports': <ReportsPage />,
   '/admin/billing-settings': <BillingSettingsPage />,
   '/admin/kot': <KotsPage />,
   '/admin/printers': <PrintersPage />,

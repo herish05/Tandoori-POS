@@ -85,6 +85,27 @@
       "when": 1791356074243,
       "tag": "0011_inventory_and_recipes",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1791359921833,
+      "tag": "0012_purchasing_and_suppliers",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "6",
+      "when": 1791361831198,
+      "tag": "0013_expenses_and_cash",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "6",
+      "when": 1791364586825,
+      "tag": "0014_day_closings",
+      "breakpoints": true
     }
   ]
 }

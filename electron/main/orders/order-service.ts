@@ -54,6 +54,7 @@ import {
 } from '@shared/orders'
 import { nextDocumentNumber } from './numbering'
 import { moveOrderStatus, refreshOrderSubtotal } from './order-state'
+import type { DayLock } from '../finance/day-lock'
 
 type OrderRow = typeof orders.$inferSelect
 type LineRow = typeof orderItems.$inferSelect
@@ -74,7 +75,8 @@ export class OrderService {
     private readonly audit: AuditService,
     private readonly clock: Clock,
     private readonly kots: KotService,
-    private readonly inventory: InventoryService
+    private readonly inventory: InventoryService,
+    private readonly lock: DayLock
   ) {}
 
   // --- Reads -------------------------------------------------------------------------------
@@ -110,6 +112,7 @@ export class OrderService {
   /** Creates an order with its first lines; a dine-in order also opens its table. */
   create(auth: AuthContext, input: CreateOrderData): OrderDetail {
     const id = this.db.transaction((tx) => {
+      this.lock.assertOpen(tx, 'start a new order')
       const restaurantId = requireRestaurantId(tx)
       if (input.type === 'DINE_IN' && input.tableId) {
         this.claimTable(tx, auth, input.tableId, input.guestCount)

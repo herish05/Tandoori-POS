@@ -204,7 +204,7 @@ Every handler is registered through `createIpcRegistrar`, which:
 - Renderer: the order screen has "Generate bill" and a link to its bill; `/pos/bills/:id` and
   `/admin/bills/:id` show one bill with discount, payment and cancel actions; `/admin/bills` lists bills;
   `/admin/billing-settings` sets GST mode, service charge and round-off.
-- Not here yet: a payment ledger and cash drawer (later phases). Receipts and refunds are below.
+- Not here yet: a payment ledger (later phases); the cash drawer is Phase 15. Receipts and refunds are below.
 
 ## Receipts and refunds (Phase 9)
 
@@ -300,7 +300,105 @@ Every handler is registered through `createIpcRegistrar`, which:
 - Renderer: Inventory page with Stock (summary, low-stock flags, stock in / wastage / count), Movements (the ledger,
   filtered) and Recipes (menu items with coverage, a tab per size, ingredient editor).
 - Not here: add-ons and modifiers using stock, unit conversion (kg to g), weighted-average cost, batches and expiry,
-  transfers between locations, automatic sold-out, purchase orders and suppliers (Phase 14), reports (Phase 17).
+  transfers between locations, automatic sold-out, reports (now Phase 17). Purchasing is Phase 14.
+
+## Purchasing and suppliers (Phase 14)
+
+- Tables: `suppliers`, `purchases`, `purchase_lines`, `supplier_payments` (migration `0012`). Money is integer
+  paise and quantities are thousandths of the item's unit. `purchases` has CHECKs `total = subtotal - discount + tax`
+  and `amount_paid <= total`.
+- Lifecycle: a purchase starts as a DRAFT (editable, no stock effect) and becomes RECEIVED or CANCELLED, never
+  back. Triggers enforce the flow, freeze a non-draft purchase and its lines, forbid deleting purchases, lines and
+  payments, take payments only against RECEIVED purchases, make payment fields immutable and allow a payment to be
+  voided only once.
+- Receiving, in one transaction: checks each item is active and its unit unchanged, posts a `STOCK_IN` ledger entry
+  per line through `InventoryService.receiveStock` and sets the item's unit cost to the purchase price, then marks
+  the purchase RECEIVED. Purchase numbers come from the same numbering service (`PREFIX-PUR-000001`).
+- Payments: part or full, by cash, UPI, bank, cheque or other, never more than what is outstanding. A wrong payment
+  is voided with a reason (kept on record) and the amount becomes due again. Payment status is derived: not due,
+  unpaid, partial, paid.
+- Permissions: `suppliers.view|manage`, `purchases.view|operate|pay`. Channels `suppliers:*` and `purchases:*`;
+  audit actions `supplier.*` and `purchase.*`.
+- Renderer: Suppliers page (search, owed-only, deactivate, delete only with no purchase history) and Purchases page
+  (summary, filters, draft form with a line editor and live totals, detail with receive, cancel, payments).
+- Not here: purchase orders sent to suppliers, partial receiving, reversing or returning a received purchase (use a
+  stock count), supplier credit notes and advances, due dates and terms, weighted-average cost, reports (now Phase 17).
+  Cash supplier payments reach the cash drawer in Phase 15.
+
+## Expenses and cash (Phase 15)
+
+- Tables: `expense_categories`, `expenses`, `cash_entries` (migration `0013`). Money is integer paise. Expense
+  numbers come from the numbering service (`PREFIX-EXP-000001`).
+- Expenses: a category, an amount, how it was paid (cash, UPI, bank, card, cheque, other), payee, reference, notes
+  and the time it was spent (never in the future). An expense can be corrected while it stands (audited with the
+  old and new amount); a wrong one is voided with a reason and stays on record. Triggers forbid deleting an
+  expense, changing its number or author, changing a voided expense and voiding it twice. Categories are unique by
+  name (case-insensitive), can be deactivated, and are deleted only when no expense uses them.
+- Cash drawer: nothing is copied into a ledger. The cash book reads cash from where it was recorded: bill payments
+  by cash (in), cash refund lines, cash expenses and cash supplier payments (out), plus `cash_entries` kept by hand
+  (opening float and cash added in; bank deposits, owner withdrawals and other cash removed out). Voided expenses,
+  supplier payments and entries never count. A cash entry cannot be edited or deleted, only voided once.
+- Balances: the book for a range of days shows the opening balance (everything before the first day), each
+  movement oldest first, totals and the closing balance. The summary gives the balance now and today's movement.
+  A "day" is the local day of the machine, as on the till. The balance can go negative; it is flagged, not blocked.
+- Permissions: `expenses.view|operate|manage` (manage includes operate) and `cash.view|manage`. Channels
+  `expense-categories:*`, `expenses:*` and `cash:*`; audit actions `expense_category.*`, `expense.*` and `cash.*`.
+- Renderer: Expenses page (month summary by category and method, filters, table, add, edit, void, category
+  management) and Cash drawer page (balance, today's movement, cash book with opening and closing balance, record
+  and void drawer entries).
+- Not here: recurring expenses, receipts or attachments, expense approval, a bank book for non-cash methods,
+  reports (now Phase 17).
+
+## Day closing (Phase 16)
+
+- Table `day_closings` (migration 0014): one row per closing, with the frozen day summary (JSON), expected cash,
+  counted cash, variance, the note and coin count, and who closed and reopened it. Triggers stop any change to the
+  figures, allow a reopen only once and block deletes. A partial unique index allows one standing closing per
+  business date. Closings are numbered like `TK-DAY-000001`.
+- Days are machine-local calendar days (`YYYY-MM-DD`). A day's summary reads settled bills (sales, discounts, tax,
+  by order type), payments by method, refunds, expenses, supplier payments and the cash book.
+- Closing needs every order created by the end of that day to be settled or cancelled. The counted cash is compared
+  with the book; any difference needs a note and is booked as a `COUNT_SHORT` or `COUNT_EXCESS` drawer entry
+  dated inside the closed day, so the drawer balance equals the cash counted from then on. Those two kinds cannot be
+  recorded by hand.
+- `DayLock` guards the services: once a day is closed, new orders, payments, refunds, expenses, drawer entries and
+  supplier payments (and changes or voids of those dated in the day) fail with `CONFLICT`. Only the latest closed day
+  can be reopened; reopening needs a reason, voids the count entry and lifts the lock, and the old closing stays on
+  record. Closing again makes a new closing number.
+- Overview lists earlier days (31-day look-back) that had money activity but were never closed.
+- Permissions `day.view`, `day.close` and `day.reopen` (close and reopen imply view); channels `day:*`; audit
+  actions `day.closed` and `day.reopened`.
+- Renderer: Day closing page (date picker, unclosed-day banner, summary, blockers, count-by-note dialog with a live
+  difference, closed card, reopen, history).
+- Not here: shift or cashier-level closing, a drawer per user, a printed day report (Phase 18), a sales-vs-closing reconciliation report,
+  bank, UPI and card reconciliation. The lock is enforced in services, not by database triggers.
+
+## Reporting (Phase 17)
+
+- No table or migration: reports are read-only queries over the live tables. Each report is worked out in the main
+  process (`electron/main/reports/`) and returned as a ready-made table (`ReportResult`: columns, rows, a totals row
+  and a short summary). The screen, the CSV, the PDF and the printed page all draw the same result, so they cannot
+  disagree.
+- Seventeen reports in four groups. Sales: sales, daily, monthly, item, category, payment, tax, discount and staff.
+  Kitchen and cancellations: KOT, cancelled orders, cancelled bills. Stock and purchasing: inventory, purchases,
+  suppliers. Money: expenses and day closings. Each report lists the filters it understands (`REPORTS` in
+  `shared/reports.ts`); a filter a report does not use is ignored, and a value it does not offer (a method or status
+  outside its list) is refused with `VALIDATION_ERROR`.
+- Dates are machine-local calendar days, both ends included. A range may cover at most 1830 days and a report keeps at
+  most 10000 rows; a longer one is cut and says so. Money is paise, quantities thousandths and percentages basis
+  points in the result; only the formatters turn them into rupees and decimals.
+- Sales figures count settled bills by their settlement time, so unpaid and cancelled bills never appear; refunds are
+  taken off the net. Item sales share a bill's discount across its items. Inventory shows stock now plus movement
+  inside the period. Purchases default to received ones; a status picks drafts or cancelled ones.
+- CSV: UTF-8 with a BOM, plain decimals for money, quantities and percentages (so they add up in a spreadsheet),
+  and text that could run as a formula is prefixed with a quote. PDF and print draw an HTML page in a hidden window;
+  save and print go through a `ReportOutput` interface, so the Electron dialogs are the only untested part.
+- Permissions `reports.view` and `reports.export` (export implies view); channels `reports:*`; audit action
+  `report.exported` (CSV, PDF or print, with the kind and dates). A cancelled save is not recorded.
+- Renderer: Reports page (report list by group, dates and filters, summary cards, table with totals and paging of
+  200 rows, CSV, PDF and Print buttons for those who may export).
+- Not here: scheduled or emailed reports, saved filters, charts, comparison with an earlier period, profit and loss,
+  GST return formats, a stock valuation as of a past date, and the printer-driven (thermal) report print (Phase 18).
 
 ## Touch screen and mouse
 
@@ -323,20 +421,24 @@ Channels `app`, `security`, `sync`, `printer`, `database` -> JSON lines, daily f
 
 ## Phase plan
 
-| #   | Phase                                                                                                                                                              | Outcome                                                       |
-| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------- |
-| 1   | Foundation (done)                                                                                                                                                  | Shell, IPC, SQLite, migrations, logging, health, tests        |
-| 2   | Authentication and restaurant setup (done)                                                                                                                         | First-run setup, users, roles, password login, permissions    |
-| 3   | Areas and tables (done)                                                                                                                                            | Table CRUD, table view with live status                       |
-| 4   | Menu management (done)                                                                                                                                             | Categories, items, variants, add-ons, taxes                   |
-| 5   | Ordering (done)                                                                                                                                                    | Dine-in / takeaway / delivery orders, cart, hold              |
-| 6   | KOT and printing (done)                                                                                                                                            | Per-station KOTs, printer abstraction, preview fallback       |
-| 8   | Billing and payments (done)                                                                                                                                        | Bills, discounts, split, payment modes, settlement            |
-| 9   | Payment and receipt (done)                                                                                                                                         | 58/80 mm receipts, reprint audit, refunds                     |
-| 10  | Advanced table operations (done)                                                                                                                                   | Shift table, merge tables, operation records                  |
-| 11  | Takeaway, pickup and delivery (done)                                                                                                                               | Promised time, rider dispatch, delivery and packaging charges |
-| 12  | Customers and reservations (done)                                                                                                                                  | Customer records, phone lookup, bookings, seating             |
-| 13  | Inventory and recipes (done)                                                                                                                                       | Stock items, ledger, recipes, auto-deduction on KOT           |
-| 8+  | Printing, inventory, purchases, customers, reservations, reports, shifts/cash drawer, LAN sync, cloud backend and sync, backup/restore, installers and auto-update | Per the product spec                                          |
+| #   | Phase                                                                                                                                                     | Outcome                                                       |
+| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| 1   | Foundation (done)                                                                                                                                         | Shell, IPC, SQLite, migrations, logging, health, tests        |
+| 2   | Authentication and restaurant setup (done)                                                                                                                | First-run setup, users, roles, password login, permissions    |
+| 3   | Areas and tables (done)                                                                                                                                   | Table CRUD, table view with live status                       |
+| 4   | Menu management (done)                                                                                                                                    | Categories, items, variants, add-ons, taxes                   |
+| 5   | Ordering (done)                                                                                                                                           | Dine-in / takeaway / delivery orders, cart, hold              |
+| 6   | KOT and printing (done)                                                                                                                                   | Per-station KOTs, printer abstraction, preview fallback       |
+| 8   | Billing and payments (done)                                                                                                                               | Bills, discounts, split, payment modes, settlement            |
+| 9   | Payment and receipt (done)                                                                                                                                | 58/80 mm receipts, reprint audit, refunds                     |
+| 10  | Advanced table operations (done)                                                                                                                          | Shift table, merge tables, operation records                  |
+| 11  | Takeaway, pickup and delivery (done)                                                                                                                      | Promised time, rider dispatch, delivery and packaging charges |
+| 12  | Customers and reservations (done)                                                                                                                         | Customer records, phone lookup, bookings, seating             |
+| 13  | Inventory and recipes (done)                                                                                                                              | Stock items, ledger, recipes, auto-deduction on KOT           |
+| 14  | Purchasing and suppliers (done)                                                                                                                           | Suppliers, purchase drafts, receiving into stock, payments    |
+| 15  | Expenses and cash (done)                                                                                                                                  | Expense categories, expenses, cash drawer and cash book       |
+| 16  | Day closing (done)                                                                                                                                        | Day summary, cash count, closing and reopening, day lock      |
+| 17  | Reporting (done)                                                                                                                                          | 17 reports, filters, CSV, PDF and print export                |
+| 8+  | Printing, inventory, purchases, customers, reservations, shifts/cash drawer, LAN sync, cloud backend and sync, backup/restore, installers and auto-update | Per the product spec                                          |
 
 Each phase ships working, tested software with a written report; no phase starts until the previous one passes tests.

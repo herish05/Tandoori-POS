@@ -16,6 +16,10 @@ import { registerBillingHandlers } from './billing-handlers'
 import { registerKitchenHandlers } from './kitchen-handlers'
 import { registerCustomerHandlers } from './customer-handlers'
 import { registerInventoryHandlers } from './inventory-handlers'
+import { registerFinanceHandlers } from './finance-handlers'
+import { registerPurchasingHandlers } from './purchasing-handlers'
+import { registerReportHandlers } from './reports-handlers'
+import { createElectronReportOutput } from './reports/electron-output'
 import { registerOrderHandlers } from './order-handlers'
 import { registerReservationHandlers } from './reservation-handlers'
 import { registerTableHandlers } from './table-handlers'
@@ -168,6 +172,13 @@ function bootstrap(): void {
     registerCustomerHandlers(registrar, services)
     registerReservationHandlers(registrar, services)
     registerInventoryHandlers(registrar, services)
+    registerPurchasingHandlers(registrar, services)
+    registerFinanceHandlers(registrar, services)
+    registerReportHandlers(
+      registrar,
+      services,
+      createElectronReportOutput({ getWindow: () => mainWindow })
+    )
   }
 
   mainWindow = createMainWindow(ctx, { devServerUrl })

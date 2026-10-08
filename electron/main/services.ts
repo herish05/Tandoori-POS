@@ -17,6 +17,13 @@ import { BillingSettingsService } from './billing/settings-service'
 import { CustomerService } from './customers/customer-service'
 import { InventoryService } from './inventory/inventory-service'
 import { RecipeService } from './inventory/recipe-service'
+import { CashService } from './finance/cash-service'
+import { DayClosingService } from './finance/day-closing-service'
+import { ReportService } from './reports/report-service'
+import { DayLock } from './finance/day-lock'
+import { ExpenseService } from './finance/expense-service'
+import { PurchaseService } from './purchasing/purchase-service'
+import { SupplierService } from './purchasing/supplier-service'
 import { ReservationService } from './reservations/reservation-service'
 import { KotService } from './kitchen/kot-service'
 import { NetworkPrinterDriver, type PrinterDrivers } from './printing/drivers'
@@ -59,6 +66,12 @@ export interface Services {
   reservations: ReservationService
   inventory: InventoryService
   recipes: RecipeService
+  suppliers: SupplierService
+  purchases: PurchaseService
+  expenses: ExpenseService
+  cash: CashService
+  dayClosing: DayClosingService
+  reports: ReportService
 }
 
 export interface ServiceDeps {
@@ -95,15 +108,17 @@ export function createServices(deps: ServiceDeps): Services {
 
   const categories = new CategoryService(deps.db, audit)
   const items = new ItemService(deps.db, audit)
+  const dayLock = new DayLock(clock)
   const inventory = new InventoryService(deps.db, audit, clock)
   const kots = new KotService(deps.db, audit, clock, inventory)
   const printers = new PrinterService(deps.db, audit)
   const billingSettings = new BillingSettingsService(deps.db, audit)
   const drivers: PrinterDrivers = { NETWORK: new NetworkPrinterDriver(), ...deps.printDrivers }
   const print = new PrintService(deps.db, audit, clock, kots, printers, drivers, deps.logger)
-  const bills = new BillService(deps.db, audit, clock, billingSettings)
-  const orders = new OrderService(deps.db, audit, clock, kots, inventory)
+  const bills = new BillService(deps.db, audit, clock, billingSettings, dayLock)
+  const orders = new OrderService(deps.db, audit, clock, kots, inventory, dayLock)
   const tables = new TableService(deps.db, audit, clock)
+  const cash = new CashService(deps.db, audit, clock, dayLock)
 
   return {
     audit,
@@ -132,6 +147,12 @@ export function createServices(deps: ServiceDeps): Services {
     customers: new CustomerService(deps.db, audit),
     reservations: new ReservationService(deps.db, audit, clock, tables),
     inventory,
-    recipes: new RecipeService(deps.db, audit)
+    recipes: new RecipeService(deps.db, audit),
+    suppliers: new SupplierService(deps.db, audit),
+    purchases: new PurchaseService(deps.db, audit, clock, inventory, dayLock),
+    expenses: new ExpenseService(deps.db, audit, clock, dayLock),
+    cash,
+    dayClosing: new DayClosingService(deps.db, audit, clock, cash, dayLock),
+    reports: new ReportService(deps.db, audit, clock)
   }
 }
